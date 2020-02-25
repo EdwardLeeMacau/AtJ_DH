@@ -1,10 +1,18 @@
-import os, cv2
+"""
+  Filename       [ utils.py ]
+  PackageName    [ AtJ_DH.utils ]
+"""
+
+import os
+import cv2
 import numpy as np
 from PIL import Image
 import torch
+
 def checkdirctexist(dirct):
     if not os.path.exists(dirct):
         os.makedirs(dirct)
+
 def norm_ip(img, min, max):
     img.clamp_(min=min, max=max)
     img.add_(-min).div_(max - min)
@@ -36,8 +44,9 @@ def get_image_for_test(image_name, pad=6):
     im_input = np.expand_dims(np.rollaxis(im_input, 2), axis=0)
 
     return im_input, W, H
-def  my_get_image_for_test(img,pad=6):
-    img=img.numpy()
+
+def my_get_image_for_test(img, pad=6):
+    img = img.numpy()
     img = img.astype(np.float32)
     H, W, C = img.shape
     Wk = W
@@ -50,6 +59,7 @@ def  my_get_image_for_test(img,pad=6):
     im_input = img / 255.0
     # im_input = np.expand_dims(np.rollaxis(im_input, 2), axis=0)
     return  torch.from_numpy(im_input)
+
 def myloader(image_name,pad=6):
     pic=Image.open(image_name).convert('RGB')
     img = torch.ByteTensor(torch.ByteStorage.from_buffer(pic.tobytes()))
@@ -69,12 +79,11 @@ def myloader(image_name,pad=6):
     img=norm(img) 
     img=torch.unsqueeze(img, 0)
     return img
-def norm(tensor):
-  
+
+def norm(tensor):  
     mean=(0.5, 0.5, 0.5)
     std=(0.5, 0.5, 0.5)
    
-  
       # TODO: make efficient
     for t, m, s in zip(tensor, mean, std):
         t.sub_(m).div_(s)

@@ -1,20 +1,14 @@
+import os
+from collections import OrderedDict
+
 import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
-from collections import OrderedDict
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.utils.model_zoo as model_zoo
-from collections import OrderedDict
 import torchvision.models as models
 from torch.autograd import Variable
-import os
+
 # import sys
 # sys.setrecursionlimit(10000)
 
