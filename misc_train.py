@@ -1,18 +1,19 @@
 """
   Filename       [ misc_train.py ]
   PackageName    [ AtJ_DH ]
+  Synopsis       [ ] 
 """
 
-import torch
-import os 
+import os
 import sys
+
 import numpy as np
-from torch.utils.data import DataLoader
 
-from datasets.pix2pix_notcombined import pix2pix_notcombined as commonDataset
-
+import torch
 #import transforms.pix2pix as transforms
-import transforms.pix1pix as transforms 
+import transforms.pix1pix as transforms
+from datasets.pix2pix_notcombined import pix2pix_notcombined as commonDataset
+from torch.utils.data import DataLoader
 
 
 def create_exp_dir(exp):
@@ -37,33 +38,41 @@ def weights_init(m):
 
 def getLoader(datasetName, dataroot, originalSize, imageSize, batchSize=64, workers=4,
               mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), split='train', shuffle=True, seed=None):
+    """
+    :param datasetName:
 
-    if split == 'train':
-        dataset = commonDataset(root=dataroot,
-                                transform=transforms.Compose([
-                                    transforms.ToTensor(),
-                                    transforms.Normalize(mean, std),
-                                ]),
-                                seed=seed)
-    else:
-        dataset = commonDataset(root=dataroot,
-                                transform=transforms.Compose([
-                                    transforms.ToTensor(),
-                                    transforms.Normalize(mean, std),
-                                ]),
-                                seed=seed)
+    :param dataroot:
+    """
 
-    dataloader = DataLoader(dataset, 
-                     batch_size=batchSize, 
-                     shuffle=shuffle, 
-                     num_workers=int(workers)
-                    )
-                    
+    dataset = commonDataset(root=dataroot,
+                            transform=transforms.Compose([
+                                transforms.ToTensor(),
+                                transforms.Normalize(mean, std),
+                            ]),
+                            seed=seed)
+
+    # if split == 'train':
+    #     dataset = commonDataset(root=dataroot,
+    #                             transform=transforms.Compose([
+    #                                 transforms.ToTensor(),
+    #                                 transforms.Normalize(mean, std),
+    #                             ]),
+    #                             seed=seed)
+    # else:
+    #     dataset = commonDataset(root=dataroot,
+    #                             transform=transforms.Compose([
+    #                                 transforms.ToTensor(),
+    #                                 transforms.Normalize(mean, std),
+    #                             ]),
+    #                             seed=seed)
+
+    dataloader = DataLoader(dataset, batch_size=batchSize, shuffle=shuffle, num_workers=int(workers))
+
     return dataloader
 
 
 class AverageMeter(object):
-  """Computes and stores the average and current value"""
+    """ Computes and stores the average and current value """
     def __init__(self):
         self.reset()
 
@@ -74,10 +83,10 @@ class AverageMeter(object):
         self.count = 0
 
     def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
+        self.val   = val
+        self.sum   += val * n
         self.count += n
-        self.avg = self.sum / self.count
+        self.avg   = self.sum / self.count
 
 
 class ImagePool:
@@ -106,7 +115,15 @@ class ImagePool:
 
 
 def adjust_learning_rate(optimizer, init_lr, epoch, factor, every):
-    #import pdb; pdb.set_trace()
+    """
+    :param optimizer: 
+
+    :param init_learning_rate:
+    
+    :param epoch:
+
+    :param every:
+    """
     lrd = init_lr / every
     old_lr = optimizer.param_groups[0]['lr']
     # linearly decaying lr
