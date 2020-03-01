@@ -153,7 +153,7 @@ class Scale(object):
       # else:
       #   oh = self.size
       #   ow = int(self.size * w / h)
-      output.append(img, self.interpolation))
+      output.append(img, self.interpolation)
     return output[0], output[1]
 
 class CenterCrop(object):
