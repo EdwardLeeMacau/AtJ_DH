@@ -4,13 +4,16 @@
   Synopsis      [  ]
 """
 
+import argparser
 import os 
 import json
 
 def main():
-    dirs = ['train/I','val/I']
+    parser = argparser.ArgumentParser()
+    parser.add_argument("--directory", type=str, default='../dataset/AtJ_DH/nyu')
 
-    for dir in dirs :
+    for subfolder in ('train/I','val/I'):
+        dir = os.path.join(opt.directory, subfolder, 'I')
         dic = {}
         
         for i, j in enumerate(os.listdir(dir)):
