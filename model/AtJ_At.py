@@ -1,6 +1,7 @@
 """
   Filename       [ AtJ_At.py ]
   PackageName    [ AtJ_DH.model ]
+  Synopsis       [ ] 
 """
 
 from collections import OrderedDict, namedtuple
@@ -13,13 +14,14 @@ import torchvision.models as models
 from torch.autograd import Variable
 
 
-class Model(nn.Module):
-    def __init__(self):
-        super(Model, self).__init__()
-        self.conv = nn.Conv2d(256, 256, 3, padding=1)
-
-    def forward(self, x):
-        return self.conv(x)
+# (deprecated)
+# class Model(nn.Module):
+#     def __init__(self):
+#         super(Model, self).__init__()
+#         self.conv = nn.Conv2d(256, 256, 3, padding=1)
+# 
+#     def forward(self, x):
+#         return self.conv(x)
 
 class vgg16ca(nn.Module): # extract relu3_1
     def __init__(self):
@@ -32,9 +34,9 @@ class vgg16ca(nn.Module): # extract relu3_1
         self.feature3_3 = nn.Sequential()
 
         for i in range(16): # extract relu3_3
-            if i<2:
+            if i < 2:
                 self.feature1_1.add_module(str(i),haze_class.features[i])
-            if i<9:
+            if i < 9:
                 self.feature2_2.add_module(str(i),haze_class.features[i])
             self.feature3_3.add_module(str(i),haze_class.features[i])
 
@@ -42,8 +44,6 @@ class vgg16ca(nn.Module): # extract relu3_1
         # should I upsample it to 3*640*640 ????
         
     def forward(self, x):
-
-        # out=[self.feature1_1(x),self.feature2_2(x),self.feature3_3(x)]
         return self.feature1_1(x),self.feature2_2(x),self.feature3_3(x)
         # return out
 

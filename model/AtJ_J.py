@@ -1,19 +1,20 @@
+from collections import OrderedDict, namedtuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
-from collections import OrderedDict
 import torchvision.models as models
 from torch.autograd import Variable
-from collections import namedtuple
 
-class Model(nn.Module):
-    def __init__(self):
-        super(Model, self).__init__()
-        self.conv = nn.Conv2d(256,256, 3,padding=1)# submodule: Conv2d
-
-    def forward(self, x):
-       return self.conv(x)
+# (deprecated)
+# class Model(nn.Module):
+#     def __init__(self):
+#         super(Model, self).__init__()
+#         self.conv = nn.Conv2d(256,256, 3,padding=1)# submodule: Conv2d
+# 
+#     def forward(self, x):
+#        return self.conv(x)
 
 class vgg16ca(nn.Module): # extract relu3_1
     def __init__(self):

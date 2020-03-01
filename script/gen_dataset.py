@@ -1,7 +1,7 @@
 """
   Filename      [ gen_dataset.py ]
   PackageName   [ AtJ_DH.artificial_dataset ]
-  Synopsis      [ Split the dataset into training and validation set ]
+  Synopsis      [ Generate dataset with the Nyu dataset. ]
 """
 
 import os
@@ -10,6 +10,7 @@ import random
 import h5py
 import numpy as np
 import skimage.io as io
+
 
 def main():
     for i in ['A', 'I', 'J', 'depth', 't']:

@@ -1,8 +1,11 @@
+import argparse
 import os
 import sys
-from PIL import Image
+import time
+
 import numpy as np
-import argparse
+from PIL import Image
+
 from natsort import natsorted, ns
 
 # resize to 4096*2048 >> crop patches with size 2048*2048 >> shift the patch 512 every time when done cropping
@@ -30,7 +33,6 @@ if not os.path.exists(processed_dir):
 w = opt.w
 h = opt.h
 
-import time
 
 for root, _, fnames in (os.walk(unprocessed_dir)):
   for i, fname in enumerate( natsorted(fnames, key=lambda y: y.lower()) ):
@@ -44,4 +46,3 @@ for root, _, fnames in (os.walk(unprocessed_dir)):
       img_t.save(os.path.join(CURR_DIR, processed_dir, str(j + 5*i) + '.png'))
     t1 = time.time()
     print('running time:'+str(t1-t0))
-

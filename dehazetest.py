@@ -21,24 +21,28 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
-#cudnn.benchmark = True
-#cudnn.fastest = True
 import torch.optim as optim
 import torchvision.utils as vutils
 from misc import *
 from torch.autograd import Variable
 
+from cmdparser import parser
+
 # import models.dehaze1113 as net
-#import dehaze1113 as net
+# import dehaze1113 as net
 # import model.AtJ_At as net
 
+# cudnn.benchmark = True
+# cudnn.fastest = True
+
+os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def norm_ip(img, min, max):
     img.clamp_(min=min, max=max)
     img.add_(-min).div_(max - min)
 
     return img
-
 
 def norm_range(t, range):
     if range is not None:
@@ -47,51 +51,13 @@ def norm_range(t, range):
         norm_ip(t, t.min(), t.max())
     return norm_ip(t, t.min(), t.max())
 
-# import sys
-# sys.setrecursionlimit(10000)
-
-
-
 def main():
     print("dehazetest.py start!!")
-    os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"]="0"
+
     torch.cuda.set_device(0)
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', required=False,
-        default='pix2pix',  help='')
-    parser.add_argument('--dataroot', required=False,
-        default='/mnt/dehaze/dehazing/AtJ_DH_final/test_images/I_ori_patches', help='path to train dataset')
-    parser.add_argument('--valDataroot', required=False,
-        default='/mnt/dehaze/dehazing/AtJ_DH_final/test_images/I_ori_patches', help='path to val dataset')
-    parser.add_argument('--outdir', required=False,
-        default='./test_images/result_patches/', help='path to output folder')
-    parser.add_argument('--batchSize', type=int, default=1, help='input batch size')
-    parser.add_argument('--valBatchSize', type=int, default=1, help='input batch size')
-    parser.add_argument('--originalSize', type=int,
-        default=480, help='the height / width of the original input image')
-    parser.add_argument('--imageSize', type=int,
-        default=480, help='the height / width of the cropped input image to network')
-    parser.add_argument('--inputChannelSize', type=int,
-        default=3, help='size of the input channels')
-    parser.add_argument('--outputChannelSize', type=int,
-        default=3, help='size of the output channels')
-    parser.add_argument('--ngf', type=int, default=64)
-    parser.add_argument('--ndf', type=int, default=64)
-    parser.add_argument('--niter', type=int, default=400, help='number of epochs to train for')
-    parser.add_argument('--lambdaGAN', type=float, default=0.01, help='lambdaGAN')
-    parser.add_argument('--lambdaIMG', type=float, default=1, help='lambdaIMG')
-    parser.add_argument('--poolSize', type=int, default=50, help='Buffer size for storing previously generated samples from G')
-    parser.add_argument('--netG', default='./pretrained-model/finalCKPT_at.pth', help="path to netG (to continue training)")
-    parser.add_argument('--netD', default='', help="path to netD (to continue training)")
-    parser.add_argument('--workers', type=int, help='number of data loading workers', default=1)
-    parser.add_argument('--exp', default='sample', help='folder to output images and model checkpoints')
-    parser.add_argument('--display', type=int, default=5, help='interval for displaying train-logs')
-    parser.add_argument('--evalIter', type=int, default=500, help='interval for evauating(generating) images from valDataroot')
     opt = parser.parse_args()
     print(opt)
-
 
     create_exp_dir(opt.exp)
     opt.manualSeed = random.randint(1, 10000)
@@ -101,25 +67,27 @@ def main():
     torch.cuda.manual_seed_all(opt.manualSeed)
     print("Random Seed: ", opt.manualSeed)
 
-    opt.dataset='pix2pix_val_temp'
+    opt.dataset = 'pix2pix_val_temp'
 
-    valDataloader = getLoader(opt.dataset,
-                            opt.valDataroot,
-                            opt.imageSize, #opt.originalSize,
-                            opt.imageSize,
-                            opt.valBatchSize,
-                            opt.workers,
-                            mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-                            split='val',
-                            shuffle=False,
-                            seed=opt.manualSeed)
+    valDataloader = getLoader(
+        opt.dataset,
+        opt.valDataroot,
+        opt.imageSize, #opt.originalSize,
+        opt.imageSize,
+        opt.valBatchSize,
+        opt.workers,
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        split='val',
+        shuffle=False,
+        seed=opt.manualSeed
+    )
 
     inputChannelSize = opt.inputChannelSize
     outputChannelSize= opt.outputChannelSize
 
-    #netG=net.Dense_rain_cvprw3()
+    # netG=net.Dense_rain_cvprw3()
     # netG.apply(weights_init)
-    netG=net.AtJ()
+    netG = net.AtJ()
 
     print("Before modify!!\n")
     # print("Pretrained-model:\n")
@@ -155,57 +123,47 @@ def main():
     criterionBCE = nn.BCELoss()
     criterionCAE = nn.L1Loss()
 
-    val_target= torch.FloatTensor(opt.valBatchSize, outputChannelSize, opt.imageSize, opt.imageSize)
-    val_input = torch.FloatTensor(opt.valBatchSize, inputChannelSize, opt.imageSize, opt.imageSize)
-
     val_target = torch.FloatTensor(opt.valBatchSize, outputChannelSize, opt.imageSize, opt.imageSize)
     val_input = torch.FloatTensor(opt.valBatchSize, inputChannelSize, opt.imageSize, opt.imageSize)
 
-    # netG.cuda()
-    # criterionBCE.cuda()
-    # criterionCAE.cuda()
+    # val_target = torch.FloatTensor(opt.valBatchSize, outputChannelSize, opt.imageSize, opt.imageSize)
+    # val_input = torch.FloatTensor(opt.valBatchSize, inputChannelSize, opt.imageSize, opt.imageSize)
+
+    # Switch on CUDA
+    netG.cuda()
+    criterionBCE.cuda()
+    criterionCAE.cuda()
 
     # val_target, val_input = val_target.cuda(), val_input.cuda()
 
+    t0 = time.time()
+    for i, data_val in enumerate(valDataloader, 0):
+        val_input_cpu, val_target_cpu, path = data_val
 
-    for epoch in range(1):
-        for i, data_val in enumerate(valDataloader, 0):
-            if 1:
-                t0 = time.time()
+        val_input.resize_as_(val_input_cpu).copy_(val_input_cpu)
+        val_target = Variable(val_target_cpu, volatile=True)
+        
+        for _ in range(val_input.size(0)):
+            x_hat_val = netG(val_target)[0]
 
-            val_input_cpu, val_target_cpu, path = data_val
+            # val_batch_output[idx,:,:,:].copy_(x_hat_val.data)
+        # vutils.save_image(x_hat_val.data, './image_heavy/'+str(i)+'.jpg', normalize=True, scale_each=False,  padding=0, nrow=1)
+        tensor = x_hat_val.data.cpu()
 
-            # val_target_cpu, val_input_cpu = val_target_cpu.float().cuda(), val_input_cpu.float().cuda()
+        if not os.path.exists(opt.outdir):
+            os.makedirs(opt.outdir)
 
-            val_input.resize_as_(val_input_cpu).copy_(val_input_cpu)
-            val_target=Variable(val_target_cpu, volatile=True)
-            
-            for idx in range(val_input.size(0)):
-                x_hat_val = netG(val_target)[0]
-                # from IPython import embed
-                # embed()
+        filename = os.path.join(opt.outdir, str(i) + '.png')
 
-                # val_batch_output[idx,:,:,:].copy_(x_hat_val.data)
-            # vutils.save_image(x_hat_val.data, './image_heavy/'+str(i)+'.jpg', normalize=True, scale_each=False,  padding=0, nrow=1)
-            tensor = x_hat_val.data.cpu()
+        tensor = torch.squeeze(tensor)
+        tensor = norm_range(tensor, None)
+        print('Patch:'+str(i))
 
-            directory = opt.outdir
-            if not os.path.exists(directory):
-                os.makedirs(directory)
-
-            name = ''.join(path)
-            filename = directory+'/' + str(i) + '.png'
-
-            tensor = torch.squeeze(tensor)
-            tensor=norm_range(tensor, None)
-            print('Patch:'+str(i))
-
-
-            ndarr = tensor.mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
-            im = Image.fromarray(ndarr)
-            im.save(filename)
-            t1 = time.time()
-            print('running time:'+str(t1-t0))
+        ndarr = tensor.mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
+        im = Image.fromarray(ndarr)
+        im.save(filename)
+        t1 = time.time()
+        print('running time:'+str(t1-t0))
 
 if __name__ == "__main__":
     main()
