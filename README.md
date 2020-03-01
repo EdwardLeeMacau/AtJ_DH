@@ -20,7 +20,12 @@ Navigate to the downloaded folder, in terminal, type:
 python MAINTHREAD_test.py
 ```
 
-##########################POST_PROCESSING################################
+## Pretrained Model
+
+[here](https://drive.google.com/drive/folders/1d_N-dlj3NJ2tSWQ6wnPJ7tBAmpL-dtm_)
+
+## Post Processing Results
+
 To get the post processing results, please copy please go to [here](https://drive.google.com/drive/folders/1Ezzwa-dg15UbkPYZIAd3BNb7Zi5cJ-35?usp=sharing)
 
 (the results generated from this code is pre-loaded in that post-processing folder)
@@ -52,8 +57,8 @@ To get the post processing results, please copy please go to [here](https://driv
 
 	The folder includes the dehazed images of the test images provided in NTIRE 19 Dehazing Challenge.
 
-	1. ##.png: the dehazed images using our proposed network.
-	2. readme.txt: the information for running time, GPU and Data usage
+	1. `*.png`: the dehazed images using our proposed network.
+	2. `readme.txt`: the information for running time, GPU and Data usage
 
 4. testset:
 
