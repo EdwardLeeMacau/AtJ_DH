@@ -1,10 +1,10 @@
 """
   Filename      [ split_dataset.py ]
-  PackageName   [ AtJ_DH.artificial_dataset ]
+  PackageName   [ AtJ_DH.script ]
   Synopsis      [ Split the dataset into training and validation set ]
 """
 
-import argparser
+import argparse
 import os
 import random
 from shutil import copy
@@ -16,7 +16,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--directory', type=str, 
         default='../dataset/AtJ_DH/nyu')
-    parser.add_argument('--ratio', type=float
+    parser.add_argument('--ratio', type=float,
         default=0.8)
     opt = parser.parse_args()
 
@@ -25,7 +25,7 @@ def main():
 
     # Generate Number List
     f_list = []
-    for i in os.listdir('J'):
+    for i in os.listdir(os.path.join(opt.directory, 'J')):
         f_list.append(i.rstrip('.png').lstrip('J'))
     random.shuffle(f_list)
 
@@ -34,26 +34,27 @@ def main():
 
     for i, dir in enumerate(dirs):
         # Training data
-        dst = os.path.join('train', dir)
+        dst = os.path.join(opt.directory, 'train', dir)
 
         if not os.path.exists(dst):
-            os.mkdir(dst)
+            os.makedirs(dst)
 
         for index, f in enumerate(f_list[:train_num]):
-            fname = os.path.join(dir, dir + f + extension[i])
-            print(fname)
-            copy(fname, f'{dst}{dir}_{index}{extension[i]}')
-        
-        dst = os.path.join('val', dir)
+            fname  = os.path.join(opt.directory, dir, dir + f + extension[i])
+            fname2 = os.path.join(dst, '{}_{}{}'.format(dir, index, extension[i]))
+            print(fname, fname2)
+            copy(fname, fname2)
 
         # Validation Data
+        dst = os.path.join(opt.directory, 'val', dir)
+
         if not os.path.exists(dst):
-            os.mkdir(dst)
+            os.makedirs(dst)
         
         for index, f in enumerate(f_list[train_num:]):
-            fname = dir + '/' + dir + f + extension[i]
-            print(fname)
-            copy(fname,f'{dst}{dir}_{index}{extension[i]}')
+            fname  = os.path.join(opt.directory, dir, dir + f + extension[i])
+            fname2 = os.path.join(dst, '{}_{}{}'.format(dir, index, extension[i]))
+            copy(fname, fname2)
 
 if __name__ == "__main__":
     main()

@@ -1,21 +1,25 @@
 """
   Filename       [ utils.py ]
   PackageName    [ AtJ_DH.utils ]
+  Synopsis       [ ]
 """
 
 import os
 import cv2
 import numpy as np
 from PIL import Image
+
 import torch
 
 def checkdirctexist(dirct):
+    """ If directory is not exists, make it. """
     if not os.path.exists(dirct):
         os.makedirs(dirct)
 
 def norm_ip(img, min, max):
     img.clamp_(min=min, max=max)
     img.add_(-min).div_(max - min)
+
     return img
 
 def get_image_for_save(img, W, H, pad=6):
@@ -27,6 +31,7 @@ def get_image_for_save(img, W, H, pad=6):
     img = np.rollaxis(img, 0, 3)
     img = img.astype('uint8')
     img = img[32*pad:H+32*pad, 32*pad:W+32*pad, :]
+
     return img
 
 def get_image_for_test(image_name, pad=6):
@@ -61,7 +66,7 @@ def my_get_image_for_test(img, pad=6):
     return  torch.from_numpy(im_input)
 
 def myloader(image_name,pad=6):
-    pic=Image.open(image_name).convert('RGB')
+    pic = Image.open(image_name).convert('RGB')
     img = torch.ByteTensor(torch.ByteStorage.from_buffer(pic.tobytes()))
     # PIL image mode: 1, L, P, I, F, RGB, YCbCr, RGBA, CMYK
     if pic.mode == 'YCbCr':
@@ -78,6 +83,7 @@ def myloader(image_name,pad=6):
     
     img=norm(img) 
     img=torch.unsqueeze(img, 0)
+
     return img
 
 def norm(tensor):  
