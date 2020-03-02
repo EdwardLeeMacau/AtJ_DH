@@ -4,13 +4,15 @@
   Synopsis       [ ]
 """
 
+import argparse
 import os
 import sys
-from PIL import Image
-import numpy as np
-import argparse
 import time
+
+import numpy as np
+from PIL import Image
 from scipy.interpolate import CubicSpline
+
 from natsort import natsorted, ns
 
 # 4~5 minutes per 5-patched image
