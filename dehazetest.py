@@ -1,9 +1,8 @@
 """
   Filename       [ dehaze_test.py ]
   PackageName    [ AtJ_DH ]
+  Synopsis       [ ]
 """
-
-from __future__ import print_function
 
 import argparse
 import os
@@ -14,19 +13,21 @@ import sys
 import time
 from collections import OrderedDict
 
-from PIL import Image
-
-import model.AtJ_At as net
 import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
 import torch.optim as optim
-import torchvision.utils as vutils
-from misc import *
+import torchvision
+# import torchvision.utils as vutils
+from PIL import Image
 from torch.autograd import Variable
 
+# TODO: Remember change as AtJ_At when train my own model
+# import model.AtJ_At as net
+import At_model as net
 from cmdparser import parser
+from misc import *
 
 # import models.dehaze1113 as net
 # import dehaze1113 as net
@@ -52,14 +53,13 @@ def norm_range(t, range):
     return norm_ip(t, t.min(), t.max())
 
 def main():
-    print("dehazetest.py start!!")
+    # torch.cuda.set_device(0)
 
-    torch.cuda.set_device(0)
-
+    # CmdParser
     opt = parser.parse_args()
-    print(opt)
 
     create_exp_dir(opt.exp)
+
     opt.manualSeed = random.randint(1, 10000)
     # opt.manualSeed = 101
     random.seed(opt.manualSeed)
@@ -68,6 +68,12 @@ def main():
     print("Random Seed: ", opt.manualSeed)
 
     opt.dataset = 'pix2pix_val_temp'
+
+    for key, value in vars(opt).items():
+        print("{:20} {:>50}".format(key, str(value)))
+
+    if not os.path.exists(opt.outdir):
+        os.makedirs(opt.outdir)
 
     valDataloader = getLoader(
         opt.dataset,
@@ -85,49 +91,25 @@ def main():
     inputChannelSize = opt.inputChannelSize
     outputChannelSize= opt.outputChannelSize
 
-    # netG=net.Dense_rain_cvprw3()
-    # netG.apply(weights_init)
-    netG = net.AtJ()
+    # netG = net.AtJ()
+    netG = net.Dense()
+    netG.load_state_dict(torch.load(opt.netG))
 
-    print("Before modify!!\n")
-    # print("Pretrained-model:\n")
+    # pretrained_state_dict = torch.load(opt.netG)
+    # print(pretrained_state_dict['model'])
 
-
-    # if opt.netG != '':
-    #   pretrained_state_dict = torch.load(opt.netG)
-    #   print("Start modify!!\n")
-    #   new_state_dict = OrderedDict()
-    #   for i, (key, val) in enumerate(pretrained_state_dict.items()):
-    #     x = re.findall("dense_block[0-9]+\.denselayer[0-9]+\.(?:norm|conv)\.[0-9]+\.\S+", key) # x is list of string
-    #     if x :
-    #       normx = re.findall("norm\.[0-9]+",x[0]) # normx[0] == 'norm.1' or 'norm.2'
-    #       convx = re.findall("conv\.[0-9]+",x[0]) # convx[0] == 'conv.1' or 'conv.2'
-    #       if normx :
-    #           result_key = re.sub('norm\.[0-9]+','norm'+normx[0][5],x[0])
-    #       elif convx :
-    #           result_key = re.sub('conv\.[0-9]+','conv'+convx[0][5],x[0])
-    #       new_state_dict[result_key] = val
-    #     else :
-    #       new_state_dict[key] = val
-    pretrained_state_dict = torch.load(opt.netG)
-    if "forstage2" in opt.netG:
-        netG.load_state_dict(pretrained_state_dict)
-    else :
-        netG.load_state_dict(pretrained_state_dict['model_state_dict'])
-
-    #netG.load_state_dict(new_state_dict)
+    # if "forstage2" in opt.netG:
+    #     netG.load_state_dict(pretrained_state_dict)
+    # else:
+    #     netG.load_state_dict(pretrained_state_dict['model'])
 
     netG.eval()
-    # netG.train()
 
     criterionBCE = nn.BCELoss()
     criterionCAE = nn.L1Loss()
 
     val_target = torch.FloatTensor(opt.valBatchSize, outputChannelSize, opt.imageSize, opt.imageSize)
     val_input = torch.FloatTensor(opt.valBatchSize, inputChannelSize, opt.imageSize, opt.imageSize)
-
-    # val_target = torch.FloatTensor(opt.valBatchSize, outputChannelSize, opt.imageSize, opt.imageSize)
-    # val_input = torch.FloatTensor(opt.valBatchSize, inputChannelSize, opt.imageSize, opt.imageSize)
 
     # Switch on CUDA
     netG.cuda()
@@ -137,33 +119,31 @@ def main():
     # val_target, val_input = val_target.cuda(), val_input.cuda()
 
     t0 = time.time()
-    for i, data_val in enumerate(valDataloader, 0):
-        val_input_cpu, val_target_cpu, path = data_val
 
-        val_input.resize_as_(val_input_cpu).copy_(val_input_cpu)
-        val_target = Variable(val_target_cpu, volatile=True)
-        
-        for _ in range(val_input.size(0)):
-            x_hat_val = netG(val_target)[0]
+    with torch.no_grad():
+        for i, data_val in enumerate(valDataloader, 0):
+            val_input_cpu, val_target_cpu, path = data_val
 
-            # val_batch_output[idx,:,:,:].copy_(x_hat_val.data)
-        # vutils.save_image(x_hat_val.data, './image_heavy/'+str(i)+'.jpg', normalize=True, scale_each=False,  padding=0, nrow=1)
-        tensor = x_hat_val.data.cpu()
+            val_input.resize_as_(val_input_cpu).copy_(val_input_cpu)
+            val_target = val_target_cpu.cuda()
+            
+            for _ in range(val_input.size(0)):
+                x_hat_val = netG(val_target)[0]
 
-        if not os.path.exists(opt.outdir):
-            os.makedirs(opt.outdir)
+            tensor = x_hat_val.data.cpu()
 
-        filename = os.path.join(opt.outdir, str(i) + '.png')
+            filename = os.path.join(opt.outdir, str(i) + '.png')
 
-        tensor = torch.squeeze(tensor)
-        tensor = norm_range(tensor, None)
-        print('Patch:'+str(i))
+            tensor = torch.squeeze(tensor)
+            tensor = norm_range(tensor, None)
+            print('Patch:' + str(i))
 
-        ndarr = tensor.mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
-        im = Image.fromarray(ndarr)
-        im.save(filename)
-        t1 = time.time()
-        print('running time:'+str(t1-t0))
+            ndarr = tensor.mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
+            im = Image.fromarray(ndarr)
+            im.save(filename)
+
+            t1 = time.time()
+            print('Running time:' + str(t1-t0))
 
 if __name__ == "__main__":
     main()
