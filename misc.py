@@ -34,7 +34,6 @@ def weights_init(m):
 def getLoader(datasetName, dataroot, originalSize, imageSize, batchSize=64, workers=4,
               mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), split='train', shuffle=True, seed=None):
 
-    #import pdb; pdb.set_trace()
     if datasetName == 'pix2pix':
         from datasets.pix2pix import pix2pix as commonDataset
     elif datasetName == 'pix2pix_val':
@@ -76,7 +75,6 @@ def getLoader(datasetName, dataroot, originalSize, imageSize, batchSize=64, work
             root=dataroot,
             transform=transforms.Compose([
                 transforms.Scale(originalSize),
-                # transforms.CenterCrop(imageSize),
                 transforms.ToTensor(),
                 transforms.Normalize(mean, std),
             ]),

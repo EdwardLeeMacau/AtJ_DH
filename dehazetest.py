@@ -19,7 +19,6 @@ import torch.nn as nn
 import torch.nn.parallel
 import torch.optim as optim
 import torchvision
-# import torchvision.utils as vutils
 from PIL import Image
 from torch.autograd import Variable
 
@@ -29,23 +28,21 @@ import At_model as net
 from cmdparser import parser
 from misc import *
 
-# import models.dehaze1113 as net
-# import dehaze1113 as net
-# import model.AtJ_At as net
-
 # cudnn.benchmark = True
 # cudnn.fastest = True
 
 os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-def norm_ip(img, min, max):
+def norm_ip(img: torch.Tensor, min, max):
+    """ Normalize **img** to 0 ~ 1 """
     img.clamp_(min=min, max=max)
     img.add_(-min).div_(max - min)
 
     return img
 
-def norm_range(t, range):
+def norm_range(t: torch.Tensor, range):
+    """ Normalize **t** with parameter **range** """
     if range is not None:
         norm_ip(t, range[0], range[1])
     else:
@@ -60,12 +57,11 @@ def main():
 
     create_exp_dir(opt.exp)
 
-    opt.manualSeed = random.randint(1, 10000)
     # opt.manualSeed = 101
+    opt.manualSeed = random.randint(1, 10000)
     random.seed(opt.manualSeed)
     torch.manual_seed(opt.manualSeed)
     torch.cuda.manual_seed_all(opt.manualSeed)
-    print("Random Seed: ", opt.manualSeed)
 
     opt.dataset = 'pix2pix_val_temp'
 
@@ -76,12 +72,12 @@ def main():
         os.makedirs(opt.outdir)
 
     valDataloader = getLoader(
-        opt.dataset,
-        opt.valDataroot,
-        opt.imageSize, #opt.originalSize,
-        opt.imageSize,
-        opt.valBatchSize,
-        opt.workers,
+        datasetName=opt.dataset,
+        dataroot=opt.valDataroot,
+        originalSize=opt.imageSize, #opt.originalSize,
+        imageSize=opt.imageSize,
+        batchSize=opt.valBatchSize,
+        workers=opt.workers,
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
         split='val',
         shuffle=False,
@@ -94,14 +90,6 @@ def main():
     # netG = net.AtJ()
     netG = net.Dense()
     netG.load_state_dict(torch.load(opt.netG))
-
-    # pretrained_state_dict = torch.load(opt.netG)
-    # print(pretrained_state_dict['model'])
-
-    # if "forstage2" in opt.netG:
-    #     netG.load_state_dict(pretrained_state_dict)
-    # else:
-    #     netG.load_state_dict(pretrained_state_dict['model'])
 
     netG.eval()
 
@@ -143,7 +131,7 @@ def main():
             im.save(filename)
 
             t1 = time.time()
-            print('Running time:' + str(t1-t0))
+            print('Running time:' + str(t1 - t0))
 
 if __name__ == "__main__":
     main()

@@ -8,10 +8,7 @@ from __future__ import print_function
 
 import argparse
 import os
-# import pdb
 import random
-# import re
-# import sys
 import time
 
 from skimage.measure import compare_psnr, compare_ssim
@@ -65,29 +62,32 @@ def main():
     torch.cuda.manual_seed_all(opt.manualSeed)
     print("Random Seed: ", opt.manualSeed)
 
-    opt.dataset='pix2pix_notcombined'
-    dataloader = getLoader(opt.dataset,
-                            opt.dataroot,
-                            opt.originalSize, # no use for originalSize now, his usage is already done in Preprocess_train
-                            opt.imageSize,
-                            opt.batchSize,
-                            opt.workers,
-                            mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-                            split='train',
-                            shuffle=True, # when having a sampler, this should be set false
-                            seed=opt.manualSeed)
-      
+    opt.dataset = 'pix2pix_notcombined'
+    dataloader = getLoader(
+        datasetName=opt.dataset,
+        dataroot=opt.dataroot,
+        originalSize=opt.originalSize, # no use for originalSize now, his usage is already done in Preprocess_train
+        imageSize=opt.imageSize,
+        batchSize=opt.batchSize,
+        workers=opt.workers,
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        split='train',
+        shuffle=True, # when having a sampler, this should be set false
+        seed=opt.manualSeed
+    )
 
-    valDataloader = getLoader(opt.dataset,
-                                opt.valDataroot,
-                                opt.imageSize, # opt.originalSize,
-                                opt.imageSize,
-                                opt.valBatchSize,
-                                opt.workers,
-                                mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-                                split='val',
-                                shuffle=False,
-                                seed=opt.manualSeed)
+    valDataloader = getLoader(
+        datasetName=opt.dataset,
+        dataroot=opt.valDataroot,
+        originalSize=opt.imageSize, # opt.originalSize,
+        imageSize=opt.imageSize,
+        batchSize=opt.valBatchSize,
+        workers=opt.workers,
+        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+        split='val',
+        shuffle=False,
+        seed=opt.manualSeed
+    )
 
     # criterionBCE = nn.BCELoss()
     # criterionCAE = nn.L1Loss() 

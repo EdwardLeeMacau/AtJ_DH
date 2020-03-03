@@ -33,11 +33,16 @@ def main():
     print("Testing model ........ ")
 
     parser = argparse.ArgumentParser(description="Pytorch AtJ_model Evaluation")
-    parser.add_argument("--cuda", default=True, action="store_true", help="use cuda? Default is True")
-    parser.add_argument("--model", type=str, default="./pretrained-model/finalCKPT_at.pth", help="model path")
-    parser.add_argument("--test", type=str, default="./test_images/I_original", help="testset path")
-    parser.add_argument('--outdir', required=False, default='./test_images/result_patches/', help='path to output folder')
+    parser.add_argument("--cuda", action="store_true", 
+        default=True, help="use cuda? Default is True")
+    parser.add_argument("--model", type=str, 
+        default="./model/At_model2.pth")
+    parser.add_argument("--test", type=str, 
+        default="./test_images/NTIRE2019_RAW/test/Hazy", help="testset path")
+    parser.add_argument('--outdir', type=str,
+        default='./test_images/NTIRE2019_RAW/test/DeHazy', help='path to output folder')
     opt = parser.parse_args()
+
     cuda = opt.cuda
     device_label = 'GPU' if opt.cuda else 'CPU'
 
@@ -46,14 +51,14 @@ def main():
 
     if not cuda:
         print(">>Run on *CPU*, the running time will be longer than reported GPU run time. \n"
-            ">>To run on GPU, please run the script with --cuda option")
+              ">>To run on GPU, please run the script with --cuda option")
 
     save_path = opt.outdir
     utils.checkdirctexist(save_path)
 
     model = net.AtJ()
     pretrained_state_dict = torch.load(opt.model)
-    model.load_state_dict(pretrained_state_dict['model_state_dict'])
+    model.load_state_dict(pretrained_state_dict['model'])
 
     image_list = glob.glob(os.path.join(opt.test, '*.png'))
 
