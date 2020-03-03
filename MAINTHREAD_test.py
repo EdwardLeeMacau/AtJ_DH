@@ -8,12 +8,16 @@ import argparse
 import time
 import glob
 
+import cv2
+import numpy as np
+import torch
 from PIL import Image
 from torch.autograd import Variable
-import torch
 
 from utils import utils
-import model.AtJ_At as net
+# import model.AtJ_At as net
+from At_model import Dense
+# from At_model_feature import Dense
 
 def norm_ip(img, min, max):
     img.clamp_(min=min, max=max)
@@ -27,7 +31,6 @@ def norm_range(t, range):
     else:
         norm_ip(t, t.min(), t.max())
     return norm_ip(t, t.min(), t.max())
-
 
 def main():
     print("Testing model ........ ")
@@ -56,9 +59,11 @@ def main():
     save_path = opt.outdir
     utils.checkdirctexist(save_path)
 
-    model = net.AtJ()
-    pretrained_state_dict = torch.load(opt.model)
-    model.load_state_dict(pretrained_state_dict['model'])
+    # model = net.AtJ()
+    model = Dense()
+    model.load_state_dict(torch.load(opt.model))
+    # model = torch.load(opt.model)["model"]
+    model.eval()
 
     image_list = glob.glob(os.path.join(opt.test, '*.png'))
 
@@ -70,14 +75,15 @@ def main():
     avg_elapsed_time = 0.0
     count = 0
     i = 0
+    pad = 6
 
-    for image_name in image_list:
-        count += 1
-        print(">>Processing ./{}".format(image_name))
-        im_input, W, H = utils.get_image_for_test(image_name)
+    with torch.no_grad():
+        for image_name in sorted(image_list):
+            count += 1
+            print(">>Processing ./{}".format(image_name))
+            im_input, W, H = utils.get_image_for_test(image_name, pad=pad)
 
-        with torch.no_grad():
-            im_input = Variable(torch.from_numpy(im_input).float())
+            im_input = torch.from_numpy(im_input).float()
 
             if cuda:
                 model.cuda()
@@ -98,14 +104,20 @@ def main():
             elapsed_time = time.time() - start_time
             avg_elapsed_time += elapsed_time
 
-        tensor = im_output.data.cpu()
-        tensor = torch.squeeze(tensor)
-        tensor = norm_range(tensor, None)
-        ndarr = tensor.mul(255).clamp(0, 255).byte().permute(1, 2, 0).numpy()
-        im = Image.fromarray(ndarr)
-        filename = opt.outdir+'/' + str(i) + '.png'
-        i += 1
-        im.save(filename)
+            tensor = im_output.data.cpu()
+            tensor = torch.squeeze(tensor)
+
+            tensor = norm_range(tensor, None)
+            tensor = tensor[ :, 32*pad: 32*pad+H, 32*pad: 32*pad+W ]
+            tensor = tensor.mul(255).clamp(0, 255).byte().permute(1, 2, 0)
+
+            ndarr  = tensor.numpy()
+            ndarr  = ndarr[:, :, ::-1]
+
+            im = Image.fromarray(ndarr)
+            filename = opt.outdir + '/' + str(i) + '.png'
+            i += 1
+            im.save(filename)
 
     print(">>Finished!"
         "It takes average {}s for processing single image on {}\n"
