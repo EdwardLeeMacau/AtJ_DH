@@ -4,20 +4,22 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', required=False, 
     default='pix2pix_notcombined',  help='')
 parser.add_argument('--dataroot', required=False, 
-    default='../dataset/AtJ/trainData', help='path to trn dataset')
+    default='../dataset/DS2_2019/train', help='Path to train dataset')
 parser.add_argument('--valDataroot', required=False, 
-    default='../dataset/AtJ/valData', help='path to val dataset')
+    default='../dataset/DS2_2019/val', help='Path to validation dataset')
 parser.add_argument('--outdir', required=False, 
-    default='./pretrained-model/nyu_final_at.pth', help='path to saved model')
-  
+    default='./pretrained-model/AtJ_DH.pth', help='path to saved model')
+
+parser.add_argument('--exp', type=str,
+    default='sample', help='Folder to output images and model checkpoints') 
 parser.add_argument('--outdir_CKPT', required=False, 
-    default='./pretrained-model/nyu_finalCKPT_at.pth', help='path to checkpoint')
+    default='./pretrained-model/AtJ_DH_CKPT.pth', help='Path to checkpoint')
 parser.add_argument('--outdir_max', required=False, 
-    default='./pretrained-model/nyu_maxCKPT_at_cont.pth', help='path to max checkpoint')
+    default='./pretrained-model/AtJ_DH_MaxCKPT.pth', help='Path to max checkpoint')
 parser.add_argument('--batchSize', type=int, 
-    default=4, help='input batch size')
+    default=4, help='Input batch size when training')
 parser.add_argument('--valBatchSize', type=int, 
-    default=1, help='input batch size')
+    default=1, help='Input batch size when validation')
 parser.add_argument('--originalSize', type=int, 
     default=480, help='the height / width of the original input image')
 parser.add_argument('--imageSize', type=int, 
@@ -31,21 +33,19 @@ parser.add_argument('--outputChannelSize', type=int,
 # parser.add_argument('--ndf', type=int, 
 #     default=64)
 parser.add_argument('--niter', type=int, 
-    default=120, help='number of epochs to train for')
+    default=120, help='Number of epochs to train')
 parser.add_argument('--lambda2', type=float, 
-    default=1, help='proportion of L2 Loss')
+    default=1, help='Proportion of L2 Loss')
 parser.add_argument('--lambdaP', type=float, 
-    default=0.2, help='proportion of Lp Loss')
+    default=0.2, help='Proportion of Lp Loss')
 parser.add_argument('--poolSize', type=int, 
     default=50, help='Buffer size for storing previously generated samples from G')
 parser.add_argument('--netG', type=str,
-    default=None, help="path to netG (to continue training)")
+    default=None, help="Path to netG (to continue training)")
 # parser.add_argument('--netD', 
 #     default=None, help="path to netD (to continue training)")
 parser.add_argument('--workers', type=int, 
-    default=4, help='number of data loading workers')
-parser.add_argument('--exp', type=str,
-    default='sample', help='folder to output images and model checkpoints')
+    default=8, help='Number of data loading workers')
 # parser.add_argument('--display', type=int, 
 #     default=5, help='interval for displaying train-logs')
 # parser.add_argument('--evalIter', type=int, 

@@ -2,18 +2,9 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.utils.model_zoo as model_zoo
-from collections import OrderedDict
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 from collections import OrderedDict
 import torchvision.models as models
-from torch.autograd import Variable
 
 class BottleneckDecoderBlock(nn.Module):
     def __init__(self, in_planes, out_planes, dropRate=0.0):
@@ -277,8 +268,8 @@ class Dense(nn.Module):
 
         T = self.sigT(self.convT(self.ResT(self.convT1(T))))
         T = torch.cat([T, T, T], 1)
-        invT = 1.0 - T
-        dehaze = x - A * invT
-        dehaze = dehaze / T
+        
+        dehaze = (x - A * (1 - T)) / T
+        haze   = x * T + A * (1 - T)
 
-        return dehaze, A, T
+        return dehaze, A, T, haze

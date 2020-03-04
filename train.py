@@ -13,7 +13,8 @@ import time
 
 from skimage.measure import compare_psnr, compare_ssim
 
-import model.AtJ_At as atj  # atj_model -> atj_model2
+import model.AtJ_At as atj
+from model.At_model import Dense
 import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
@@ -21,7 +22,8 @@ import torch.nn.parallel
 # cudnn.benchmark = True
 # cudnn.fastest = True
 import torch.optim as optim
-import torchvision.utils as vutils
+from torchvision.transforms import Compose, ToTensor, Normalize
+# import torchvision.utils as vutils
 from cmdparser import parser
 from misc_train import *
 from torch import optim as optim
@@ -31,12 +33,11 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 # from collections import OrderedDict
 
+from datasets.data import DatasetFromFolder
 from utils.utils import norm_ip, norm_range
 
-
-os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
-    
+os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def main():
     opt = parser.parse_args()
@@ -47,62 +48,64 @@ def main():
     random.seed(opt.manualSeed)
     torch.manual_seed(opt.manualSeed)
     torch.cuda.manual_seed_all(opt.manualSeed)
-    print("Random Seed: ", opt.manualSeed)
-
-    opt.dataset = 'pix2pix_notcombined'
 
     for key, value in vars(opt).items():
         print("{:20} {:>50}".format(key, str(value)))
 
-    dataloader = getLoader(
-        datasetName=opt.dataset,
-        dataroot=opt.dataroot,
-        originalSize=opt.originalSize, # no use for originalSize now, his usage is already done in Preprocess_train
-        imageSize=opt.imageSize,
-        batchSize=opt.batchSize,
-        workers=opt.workers,
-        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        split='train',
-        shuffle=True, # when having a sampler, this should be set false
-        seed=opt.manualSeed
+    img_transform = Compose([ToTensor(), Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+
+    dataloader = DataLoader(
+        dataset=DatasetFromFolder(opt.dataroot, transform=img_transform), 
+        num_workers=opt.workers, 
+        batch_size=opt.batchSize, 
+        pin_memory=True, 
+        shuffle=True
     )
 
-    valDataloader = getLoader(
-        datasetName=opt.dataset,
-        dataroot=opt.valDataroot,
-        originalSize=opt.imageSize, # opt.originalSize,
-        imageSize=opt.imageSize,
-        batchSize=opt.valBatchSize,
-        workers=opt.workers,
-        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        split='val',
-        shuffle=False,
-        seed=opt.manualSeed
+    valdataloader = DataLoader(
+        dataset=DatasetFromFolder(opt.valDataroot, transform=img_transform), 
+        num_workers=opt.workers, 
+        batch_size=opt.valBatchSize, 
+        pin_memory=True, 
+        shuffle=True
     )
 
-    # criterionBCE = nn.BCELoss()
-    # criterionCAE = nn.L1Loss() 
+    # dataloader = getLoader(
+    #     datasetName=opt.dataset,
+    #     dataroot=opt.dataroot,
+    #     originalSize=opt.originalSize, # no use for originalSize now, his usage is already done in Preprocess_train
+    #     imageSize=opt.imageSize,
+    #     batchSize=opt.batchSize,
+    #     workers=opt.workers,
+    #     mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+    #     split='train',
+    #     shuffle=True, # when having a sampler, this should be set false
+    #     seed=opt.manualSeed
+    # )
+
+    # valDataloader = getLoader(
+    #     datasetName=opt.dataset,
+    #     dataroot=opt.valDataroot,
+    #     originalSize=opt.imageSize, # opt.originalSize,
+    #     imageSize=opt.imageSize,
+    #     batchSize=opt.valBatchSize,
+    #     workers=opt.workers,
+    #     mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
+    #     split='val',
+    #     shuffle=False,
+    #     seed=opt.manualSeed
+    # )
+
     criterionMSE = nn.MSELoss()
-
-    # criterionBCE.cuda()
-    # criterionCAE.cuda()
     criterionMSE.cuda()
 
-    target = torch.FloatTensor(opt.batchSize, opt.outputChannelSize, opt.imageSize, opt.imageSize)
-    input = torch.FloatTensor(opt.batchSize, opt.inputChannelSize, opt.imageSize, opt.imageSize)
+    # target = torch.FloatTensor(opt.batchSize, opt.outputChannelSize, opt.imageSize, opt.imageSize)
+    # input = torch.FloatTensor(opt.batchSize, opt.inputChannelSize, opt.imageSize, opt.imageSize)
     # val_target = torch.FloatTensor(opt.batchSize, opt.outputChannelSize, opt.imageSize, opt.imageSize) # 1*3*640*640
     # val_input = torch.FloatTensor(opt.batchSize, opt.inputChannelSize, opt.imageSize, opt.imageSize)
 
-    target, input = target.cuda(), input.cuda()
+    # target, input = target.cuda(), input.cuda()
     # val_target, val_input = val_target.cuda(), val_input.cuda()
-
-    # target = Variable(target)
-    # input = Variable(input) # !!!!!!!!!OMGGGGG..................volatile cannot be true for training..........
-    # val_target = Variable(val_target)
-    # val_input = Variable(val_input)
-
-    #val_target = Variable(val_target, volatile=True)
-    #val_input = Variable(val_input,volatile=True)
 
     # NOTE weight for L2 and Lp (i.e. Eq.(3) in the paper)
     lambda2 = opt.lambda2
@@ -117,9 +120,11 @@ def main():
     epochs = opt.niter
     running_loss = 0.0
     running_valloss, running_valpsnr, running_valssim = 0.0, 0.0, 0.0
-    print_every = 400
+    print_every = 10
+    val_every = 400
 
-    netG = atj.AtJ()
+    # netG = atj.AtJ()
+    netG = Dense()
 
     if opt.netG :
         try:
@@ -152,7 +157,7 @@ def main():
     # optimizer = optim.Adam(netG.parameters(), lr = 0.0003, weight_decay=0.00005)  # , betas = (opt.beta1, 0.999), weight_decay=0.00005
     # optimizer = optim.SGD(netG.parameters(), lr = 0.002, weight_decay=0.00005)  # , betas = (opt.beta1, 0.999), weight_decay=0.00005
     scheduler = StepLR(optimizer, step_size=35, gamma=0.7)
-    #scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs, eta_min=0.00002, last_epoch=-1)
+    # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs, eta_min=0.00002, last_epoch=-1)
 
     min_valloss, min_valloss_epoch = 20.0, 0
     max_valpsnr, max_valpsnr_epoch = 0.0, 0
@@ -168,6 +173,7 @@ def main():
 
         # Decay Learning Rate
         scheduler.step()
+
         # Print Learning Rate
         print('Epoch:', epoch,'LR:', scheduler.get_lr())
 
@@ -192,18 +198,18 @@ def main():
             loss = lambda2*L2 + kappa*Lp
           
             # Mapping ReHaze - Haze, with Perceptual Loss
-            outputs    = netG(target)[3]
-            outputsvgg = net_vgg(outputs)
-            targetvgg  = net_vgg(input)
+            # outputs    = netG(target)[3]
+            # outputsvgg = net_vgg(outputs)
+            # targetvgg  = net_vgg(input)
 
-            L2 = criterionMSE(outputs, input)
-            Lp = criterionMSE(outputsvgg[0], targetvgg[0])
+            # L2 = criterionMSE(outputs, input)
+            # Lp = criterionMSE(outputsvgg[0], targetvgg[0])
 
-            for j in range(1, 3):
-                Lp += criterionMSE(outputsvgg[j], targetvgg[j])
+            # for j in range(1, 3):
+            #     Lp += criterionMSE(outputsvgg[j], targetvgg[j])
 
-            loss += gamma * L2
-            loss += kappa * Lp
+            # loss += gamma * L2
+            # loss += kappa * Lp
             
             # Update parameters
             loss.backward()
@@ -212,10 +218,13 @@ def main():
             
             # Validation Loop
             if i % (print_every) == 0: 
-                # traindata_size==12000==3000iteration(batchsize==4) one epoch print 3000/500=6 times
-                print('[%d, %5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / print_every))
+                # traindata_size == 12000 == 3000iteration (batchsize==4) 
+                # one epoch print 3000/500=6 times
+                print('Epoch: {} [{:5d} / {:5d}] loss: {:.3f}'.format(epoch + 1, i, len(dataloader), running_loss / print_every))
                 running_loss = 0.0
-            
+
+
+            if i % (val_every) == 0:
                 netG.eval() 
                 
                 with torch.no_grad():
