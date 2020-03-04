@@ -22,6 +22,14 @@ def norm_ip(img, min, max):
 
     return img
 
+def norm_range(t, range):
+    if range is not None:
+        norm_ip(t, range[0], range[1])
+    else:
+        norm_ip(t, t.min(), t.max())
+    return norm_ip(t, t.min(), t.max())
+
+
 def get_image_for_save(img, W, H, pad=6):
     #img=norm_ip(img,img.min(),img.max())
     img = img.data[0].numpy()

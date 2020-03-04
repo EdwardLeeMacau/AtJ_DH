@@ -1,11 +1,15 @@
 from __future__ import division
-import torch
+
 import math
-import random
-from PIL import Image, ImageOps
-import numpy as np
 import numbers
+import random
 import types
+
+import numpy as np
+from PIL import Image, ImageOps
+
+import torch
+
 
 class Compose(object):
   """Composes several transforms together.

@@ -30,8 +30,8 @@ parser.add_argument('--outputChannelSize', type=int,
 #     default=64)
 # parser.add_argument('--ndf', type=int, 
 #     default=64)
-# parser.add_argument('--niter', type=int, 
-#     default=400, help='number of epochs to train for')
+parser.add_argument('--niter', type=int, 
+    default=120, help='number of epochs to train for')
 parser.add_argument('--lambda2', type=float, 
     default=1, help='proportion of L2 Loss')
 parser.add_argument('--lambdaP', type=float, 

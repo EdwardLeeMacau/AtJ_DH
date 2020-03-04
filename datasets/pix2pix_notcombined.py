@@ -75,22 +75,22 @@ class pix2pix_notcombined(data.Dataset):
         
         # hazy_path=self.root+'/'+str(index+1)+'_hazy.png' # remember make_dataset is 2 times length
         # gt_path=self.root+'/'+str(index+1)+'_gt.png'
-        hazy_path = self.root+'/I/I_'+str(index)+'.png'
+        hazy_path = self.root + '/I/I_'+str(index) + '.png'
         # gt_path = self.root+'/J/J_'+str(index)+'.png'
-        A_path    = self.root+'/A/A_'+str(index)+'.npy'
-        t_path    = self.root+'/t/t_'+str(index)+'.npy'
+        A_path    = self.root + '/A/A_'+str(index) + '.npy'
+        t_path    = self.root + '/t/t_'+str(index) + '.npy'
         imgA = self.loader(hazy_path)
         imgB = np_loader(A_path)
         imgC = np_loader(t_path)
         
+        # NOTE preprocessing for each pair of images
         if self.transform is not None:
-            # NOTE preprocessing for each pair of images
             # imgA, imgB, imgC = self.transform(imgA, imgB, imgC)
             imgA = self.transform(imgA)
             # imgB=transforms.ToTensor()(imgB)
             # imgC=transforms.ToTensor()(imgC)
             imgB = np.transpose(imgB, (2, 0, 1)) # hwc to chw
-            imgC = np.transpose(imgC, (2, 0,1)) 
+            imgC = np.transpose(imgC, (2, 0, 1)) 
 
             # imgA, imgB = self.transform(imgA, imgB)
 
