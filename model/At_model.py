@@ -1,10 +1,17 @@
+"""
+  Filename       [ At_model.py ]
+  PackageName    [ AtJ_DH.model ]
+  Synopsis       [ ] 
+"""
+
+from collections import OrderedDict, namedtuple
+
 import torch
-import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
-from collections import OrderedDict
 import torchvision.models as models
+
 
 class BottleneckDecoderBlock(nn.Module):
     def __init__(self, in_planes, out_planes, dropRate=0.0):

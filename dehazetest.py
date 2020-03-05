@@ -6,10 +6,7 @@
 
 import argparse
 import os
-import pdb
 import random
-import re
-import sys
 import time
 from collections import OrderedDict
 
@@ -20,34 +17,19 @@ import torch.nn.parallel
 import torch.optim as optim
 import torchvision
 from PIL import Image
-from torch.autograd import Variable
 
 # TODO: Remember change as AtJ_At when train my own model
 # import model.AtJ_At as net
 import At_model as net
 from cmdparser import parser
 from misc import *
+from utils.utils import norm_ip, norm_range
 
 # cudnn.benchmark = True
 # cudnn.fastest = True
 
 os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
-def norm_ip(img: torch.Tensor, min, max):
-    """ Normalize **img** to 0 ~ 1 """
-    img.clamp_(min=min, max=max)
-    img.add_(-min).div_(max - min)
-
-    return img
-
-def norm_range(t: torch.Tensor, range):
-    """ Normalize **t** with parameter **range** """
-    if range is not None:
-        norm_ip(t, range[0], range[1])
-    else:
-        norm_ip(t, t.min(), t.max())
-    return norm_ip(t, t.min(), t.max())
 
 def main():
     # torch.cuda.set_device(0)
@@ -93,27 +75,18 @@ def main():
 
     netG.eval()
 
-    criterionBCE = nn.BCELoss()
-    criterionCAE = nn.L1Loss()
-
     val_target = torch.FloatTensor(opt.valBatchSize, outputChannelSize, opt.imageSize, opt.imageSize)
     val_input = torch.FloatTensor(opt.valBatchSize, inputChannelSize, opt.imageSize, opt.imageSize)
 
     # Switch on CUDA
     netG.cuda()
-    criterionBCE.cuda()
-    criterionCAE.cuda()
-
-    # val_target, val_input = val_target.cuda(), val_input.cuda()
 
     t0 = time.time()
 
     with torch.no_grad():
-        for i, data_val in enumerate(valDataloader, 0):
-            val_input_cpu, val_target_cpu, path = data_val
-
-            val_input.resize_as_(val_input_cpu).copy_(val_input_cpu)
-            val_target = val_target_cpu.cuda()
+        for i, (data, target, path) in enumerate(valDataloader, 0):
+            val_input.resize_as_(data).copy_(data)
+            val_target = target.cuda()
             
             for _ in range(val_input.size(0)):
                 x_hat_val = netG(val_target)[0]

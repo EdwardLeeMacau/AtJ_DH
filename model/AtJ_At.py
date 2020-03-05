@@ -11,41 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 import torchvision.models as models
-from torch.autograd import Variable
 
-
-# (deprecated)
-# class Model(nn.Module):
-#     def __init__(self):
-#         super(Model, self).__init__()
-#         self.conv = nn.Conv2d(256, 256, 3, padding=1)
-# 
-#     def forward(self, x):
-#         return self.conv(x)
-
-class vgg16ca(nn.Module): # extract relu3_1
-    def __init__(self):
-        super(vgg16ca, self).__init__()
-
-        ############# 256-256  ##############
-        haze_class = models.vgg16(pretrained=True)
-        self.feature1_1 = nn.Sequential()
-        self.feature2_2 = nn.Sequential()
-        self.feature3_3 = nn.Sequential()
-
-        for i in range(16): # extract relu3_3
-            if i < 2:
-                self.feature1_1.add_module(str(i),haze_class.features[i])
-            if i < 9:
-                self.feature2_2.add_module(str(i),haze_class.features[i])
-            self.feature3_3.add_module(str(i),haze_class.features[i])
-
-        # 256*160*160
-        # should I upsample it to 3*640*640 ????
-        
-    def forward(self, x):
-        return self.feature1_1(x),self.feature2_2(x),self.feature3_3(x)
-        # return out
 
 class BottleneckDecoderBlock(nn.Module):
     def __init__(self, in_planes, out_planes, dropRate=0.0):
@@ -55,27 +21,27 @@ class BottleneckDecoderBlock(nn.Module):
         self.relu1 = nn.ReLU(inplace=True)
         self.bn2 = nn.BatchNorm2d(in_planes + 32)
         self.relu2 = nn.ReLU(inplace=True)
-        self.bn3 = nn.BatchNorm2d(in_planes + 2*32)
+        self.bn3 = nn.BatchNorm2d(in_planes + 2 * 32)
         self.relu3 = nn.ReLU(inplace=True)
-        self.bn4 = nn.BatchNorm2d(in_planes + 3*32)
+        self.bn4 = nn.BatchNorm2d(in_planes + 3 * 32)
         self.relu4 = nn.ReLU(inplace=True)
-        self.bn5 = nn.BatchNorm2d(in_planes + 4*32)
+        self.bn5 = nn.BatchNorm2d(in_planes + 4 * 32)
         self.relu5 = nn.ReLU(inplace=True)
-        self.bn6 = nn.BatchNorm2d(in_planes + 5*32)
-        self.relu6= nn.ReLU(inplace=True)
+        self.bn6 = nn.BatchNorm2d(in_planes + 5 * 32)
+        self.relu6 = nn.ReLU(inplace=True)
         self.bn7 = nn.BatchNorm2d(inter_planes)
-        self.relu7= nn.ReLU(inplace=True)
+        self.relu7 = nn.ReLU(inplace=True)
         self.conv1 = nn.Conv2d(in_planes, 32, kernel_size=3, stride=1,
                                padding=1, bias=False)
         self.conv2 = nn.Conv2d(in_planes + 32, 32, kernel_size=3, stride=1,
                                padding=1, bias=False)
-        self.conv3 = nn.Conv2d(in_planes + 2*32, 32, kernel_size=3, stride=1,
+        self.conv3 = nn.Conv2d(in_planes + 2 * 32, 32, kernel_size=3, stride=1,
                                padding=1, bias=False)
-        self.conv4 = nn.Conv2d(in_planes + 3*32, 32, kernel_size=3, stride=1,
+        self.conv4 = nn.Conv2d(in_planes + 3 * 32, 32, kernel_size=3, stride=1,
                                padding=1, bias=False)
-        self.conv5 = nn.Conv2d(in_planes + 4*32, 32, kernel_size=3, stride=1,
+        self.conv5 = nn.Conv2d(in_planes + 4 * 32, 32, kernel_size=3, stride=1,
                                padding=1, bias=False)
-        self.conv6 = nn.Conv2d(in_planes + 5*32, inter_planes, kernel_size=1, stride=1,
+        self.conv6 = nn.Conv2d(in_planes + 5 * 32, inter_planes, kernel_size=1, stride=1,
                                padding=0, bias=False)
         self.conv7 = nn.Conv2d(inter_planes, out_planes, kernel_size=3, stride=1,
                                padding=1, bias=False)
@@ -96,7 +62,7 @@ class BottleneckDecoderBlock(nn.Module):
         out = self.conv7(self.relu7(self.bn7(out6)))
         if self.droprate > 0:
             out = F.dropout(out, p=self.droprate, inplace=False, training=self.training)
-        #out = self.conv2(self.relu(self.bn2(out)))
+        # out = self.conv2(self.relu(self.bn2(out)))
         if self.droprate > 0:
             out = F.dropout(out, p=self.droprate, inplace=False, training=self.training)
         return torch.cat([x, out], 1)
@@ -119,9 +85,11 @@ class BottleneckBlock(nn.Module):
         out = self.conv1(self.relu(self.bn1(x)))
         if self.droprate > 0:
             out = F.dropout(out, p=self.droprate, inplace=False, training=self.training)
+        
         out = self.conv2(self.relu(self.bn2(out)))
         if self.droprate > 0:
             out = F.dropout(out, p=self.droprate, inplace=False, training=self.training)
+        
         return torch.cat([x, out], 1)
 
 
@@ -145,6 +113,7 @@ class ResidualBlock(nn.Module):
             out = F.dropout(out, p=self.droprate, inplace=False, training=self.training)
         return out
 
+
 class TransitionBlock(nn.Module):
     def __init__(self, in_planes, out_planes, dropRate=0.0):
         super(TransitionBlock, self).__init__()
@@ -165,10 +134,10 @@ class Dense_decoder(nn.Module):
     def __init__(self, out_channel):
         super(Dense_decoder, self).__init__()
         ############# Block5-up  16-16 ##############
-        self.dense_block5 = BottleneckDecoderBlock(128+384, 64+256)
+        self.dense_block5 = BottleneckDecoderBlock(128 + 384, 64 + 256)
         self.trans_block5 = TransitionBlock(640 + 192, 32 + 128)
-        self.residual_block51 = ResidualBlock(128+32)
-        self.residual_block52 = ResidualBlock(128+32)
+        self.residual_block51 = ResidualBlock(128 + 32)
+        self.residual_block52 = ResidualBlock(128 + 32)
 
         ############# Block6-up 32-32   ##############
         self.dense_block6 = BottleneckDecoderBlock(256+32, 128)
@@ -327,19 +296,16 @@ class AtJ(nn.Module):
         x4 = self.trans_block4(self.dense_block4(x3))
 
         ######################################
-        # J = self.decoder_J(x, x1, x2, x4)
         A = self.decoder_A(x, x1, x2, x4)
-        t = self.decoder_t(x, x1, x2, x4, activation='sig')
+        T = self.decoder_t(x, x1, x2, x4, activation='sig')
 
-        t = torch.abs((t)) + (10 ** -10)
-        t = t.repeat(1, 3, 1, 1)
+        T = torch.abs((T)) + (10 ** -10)
+        T = T.repeat(1, 3, 1, 1)
 
-        haze_reconstruct = x * t + A * (1 - t) #at
-        J_reconstruct = (x - A * (1 - t)) / t
+        dehaze = (x - A * (1 - T)) / T
+        haze   = x * T + A * (1 - T)
         
-        #return haze_reconstruct
-        # return J_reconstruct, A, t
-        return J_reconstruct, A, t, haze_reconstruct
+        return dehaze, A, T, haze
 
 class sharedEncoder(nn.Module):
     def __init__(self):
@@ -367,7 +333,7 @@ class sharedEncoder(nn.Module):
 
         ############# Block4-up  8-8  ##############
         self.dense_block4 = BottleneckBlock(896, 448)# 896, 256
-        self.trans_block4 = TransitionBlock(896+448, 256)# 1152, 128
+        self.trans_block4 = TransitionBlock(896 + 448, 256)# 1152, 128
 
     def forward(self, x, activation = 'sig'):
         ## 256x256

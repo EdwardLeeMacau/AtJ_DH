@@ -17,12 +17,14 @@ def checkdirctexist(dirct):
         os.makedirs(dirct)
 
 def norm_ip(img, min, max):
+    """ Normalize **img** to 0 ~ 1 """
     img.clamp_(min=min, max=max)
     img.add_(-min).div_(max - min)
 
     return img
 
 def norm_range(t, range):
+    """ Normalize **t** with parameter **range** """
     if range is not None:
         norm_ip(t, range[0], range[1])
     else:
