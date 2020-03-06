@@ -17,18 +17,16 @@ import random
 import numpy as np
 from joblib import Parallel, delayed
 from PIL import Image
-from scipy.misc import imsave
+# from scipy.misc import imsave
 from scipy.ndimage import rotate
 
-import utils
-
-def random_augments(sp):
+def random_augments(sp, num):
     """ Random crop and rotate augmentation """
     print("Process %s" % sp)
 
     count_im = 0
     img_hazy = os.path.join(args.hazy, sp)
-    img_gt   = os.path.join(args.gt, '_'.join([sp.split('_')[0], sp.split('_')[1], 'GT' + '.' + sp.split('_')[-1].split('.')[-1]]))
+    img_gt   = os.path.join(args.gt, sp)
 
     raw_im_A, raw_im_B = Image.open(img_hazy), Image.open(img_gt)
 
@@ -50,12 +48,13 @@ def random_augments(sp):
         #   if image_size is larger than 1536, randomly choose 512, 1024 or 1536       #
         # ---------------------------------------------------------------------------- #
 
-        if l < 1024:   
-            size = 512
-        elif l < 1536:      
-            size = np.random.choice([512, 1024], size=None, replace=False, p=[0.6, 0.4])
-        else:           
-            size = np.random.choice([512, 1024, 1536], size=None, replace=False, p=[0.6, 0.3, 0.1]) 
+        size = 512
+        # if l < 1024:
+        #     size = 512
+        # elif l < 1536:      
+        #     size = np.random.choice([512, 1024], size=None, replace=False, p=[0.6, 0.4])
+        # else:           
+        #     size = np.random.choice([512, 1024, 1536], size=None, replace=False, p=[0.6, 0.3, 0.1]) 
 
         x = random.randint(0, w - size)
         y = random.randint(0, h - size)
@@ -70,10 +69,10 @@ def random_augments(sp):
         degree = random.choice([0, 1, 2, 3])
 
         # Horizontal Flip: transforms.HorizontalFlip()
-        # Vertial Flip: transforms.VerticalFlip()
         if flip == 1:
             im_A = im_A.transpose(Image.FLIP_LEFT_RIGHT)
             im_B = im_B.transpose(Image.FLIP_LEFT_RIGHT)
+        # Vertial Flip: transforms.VerticalFlip() 
         elif flip == 2:
             im_A = im_A.transpose(Image.FLIP_TOP_BOTTOM)
             im_B = im_B.transpose(Image.FLIP_TOP_BOTTOM)
@@ -89,8 +88,8 @@ def random_augments(sp):
             im_A = im_A.transpose(Image.ROTATE_270)
             im_B = im_B.transpose(Image.ROTATE_270)
 
-        im_A.save(os.path.join(args.output, "hazy", str(count_im).zfill(4) + "_" + "_".join(sp.split('_')[:-1]) + ".png"))
-        im_B.save(os.path.join(args.output, "gt", str(count_im).zfill(4) + "_" + "_".join(sp.split('_')[:-1]) + ".png"))
+        im_A.save(os.path.join(args.output, "Hazy", str(num + count_im) + ".png"))
+        im_B.save(os.path.join(args.output, "GT", str(num + count_im) + ".png"))
                 
         count_im += 1
     
@@ -159,11 +158,12 @@ if __name__ == "__main__":
         help="the directory to hazy images")
     parser.add_argument("--gt", required=True,
         help="the directory to gt images") 
-    parser.add_arugment("--output", required=True,
+    parser.add_argument("--output", required=True,
         help="the directory to store cropped images")
   
     args = parser.parse_args()
-    utils.details(args)
+    for key, values in vars(args).items():
+        print("{:<24} {}".format(key, values))
 
     # --------------------------------------------------------- #
     # Check folders here, make the directories if don't exist.  #
@@ -179,33 +179,17 @@ if __name__ == "__main__":
         raise IOError("File doesn't not exist: {}".format(args.gt))
 
     # 1 Root Folder
-    if not os.path.exists(args.output):
-        os.makedirs(args.output)
-
-    # 1.1 GT Images
-    if os.path.exists(os.path.join(args.output, "GT")):
-        print("Folder {} exist".format(os.path.join(args.output, "GT")))
-        command = input("Clean the folder? [Y/N]").to_upper()
+    if os.path.exists(args.output):
+        print("Folder {} exist".format(args.output))
+        command = input("Clean the folder? [Y/N] ").upper()
         
         if command == 'Y':
-            os.system("rm -r" + os.path.join(args.output, "GT"))
-            os.makedirs(os.path.join(args.output, "GT"))
+            os.system("rm -r " + args.output)
  
         else:
             sys.exit(0)
-       
-    # 1.2 Hazy Images
-    if os.path.exists(os.path.join(args.output, "Hazy")):
-        print("Clean the folder: {}".format(os.path.join(args.output, "Hazy")))
-        command = input("Y/N")
-        
-        if command == 'Y':
-            os.system("rm -r" + os.path.join(args.output, "Hazy"))
-            os.makedirs(os.path.join(args.output, "Hazy"))
-    
-        else:
-            sys.exit(0)
 
+    os.makedirs(args.output)
     os.makedirs(os.path.join(args.output, "GT"))
     os.makedirs(os.path.join(args.output, "Hazy"))
 
@@ -216,5 +200,5 @@ if __name__ == "__main__":
         Parallel(-1)(delayed(augments)(sp) for sp in splits)
     
     if args.random:
-        # print("Executing: random_augments")
-        Parallel(-1)(delayed(random_augments)(sp) for sp in splits)
+        print("Executing: random_augments")
+        Parallel(-1)(delayed(random_augments)(sp, i * args.location) for i, sp in enumerate(splits))

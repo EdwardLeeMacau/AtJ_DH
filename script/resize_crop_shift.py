@@ -11,8 +11,6 @@ from natsort import natsorted, ns
 # resize to 4096*2048 >> crop patches with size 2048*2048 >> shift the patch 512 every time when done cropping
 
 def main():
-    CURR_DIR = os.path.abspath(os.path.dirname(__file__)) #C:/.../Indoor
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--inputDir', required=True)
     parser.add_argument('--outputDir', required=True)

@@ -11,6 +11,21 @@ from PIL import Image
 
 import torch
 
+def details(opt):
+    """
+    Show and marked down the training settings
+
+    Parameters
+    ----------
+    opt : namespace
+        The namespace of the train setting    
+    """
+
+    for item, values in vars(opt).items():
+        print("{:24} {}".format(item, values))
+            
+    return
+
 def checkdirctexist(dirct):
     """ If directory is not exists, make it. """
     if not os.path.exists(dirct):
