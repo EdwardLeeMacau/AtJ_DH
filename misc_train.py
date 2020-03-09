@@ -91,27 +91,35 @@ def weights_init(m):
         m.weight.data.normal_(1.0, 0.02) # seems that can't use xavier nor kaiming normal
         m.bias.data.fill_(0)
 
-def getLoader(datasetName, dataroot, originalSize, imageSize, batchSize=64, workers=4,
-              mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), split='train', shuffle=True, seed=None):
+def getLoader(dataroot, transform=None, batchSize=4, workers=4, shuffle=True, seed=None):
     """
-    :param datasetName:
+    Parameters
+    ----------
+    dataroot :
+        director of dataset
 
-    :param dataroot:
+    transform :
+
+    batchSize : int
+    
+    workers : int
+    
+    transform : torchvision.transform
     """
+    assert (isinstance(workers, int))
+    assert (isinstance(batchSize, int))
 
     dataset = commonDataset(
         root=dataroot,
-        transform=transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std),
-        ]),
-        seed=seed)
+        transform=transform,
+        seed=seed
+    )
 
     dataloader = DataLoader(
         dataset, 
         batch_size=batchSize, 
         shuffle=shuffle, 
-        num_workers=int(workers)
+        num_workers=workers
     )
 
     return dataloader

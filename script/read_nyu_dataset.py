@@ -1,6 +1,7 @@
 """
   Filename       [ read_nyu_dataset.py ]
-  PackageName    [ AtJ_DH ]
+  PackageName    [ AtJ_DH.script ]
+  Synopsis       [ Provide .mat file reader to read NYU Dataset ]
 """
 
 import h5py

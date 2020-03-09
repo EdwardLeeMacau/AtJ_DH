@@ -139,19 +139,15 @@ def getDataLoaders(opt, transform):
     )
 
     nyu_train_loader = getLoader(
-        datasetName=opt.dataset,
         dataroot=opt.dataroot,
-        originalSize=opt.originalSize, # no use for originalSize now, his usage is already done in Preprocess_train
-        imageSize=opt.imageSize,
+        transform=transform,
         batchSize=opt.batchSize,
         workers=opt.workers,
-        mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-        split='train',
-        shuffle=True, # when having a sampler, this should be set false
+        shuffle=True,
         seed=opt.manualSeed
     )
 
-    return ntire_train_loader, ntire_val_loader
+    return ntire_train_loader, ntire_val_loader, nyu_train_loader
 
 def main():
     opt = parser.parse_args()

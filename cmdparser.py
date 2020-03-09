@@ -1,13 +1,15 @@
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', required=False, 
+parser.add_argument('--dataset', 
     default='pix2pix_notcombined',  help='')
-parser.add_argument('--dataroot', required=False, 
+parser.add_argument('--dataroot', 
     default='../dataset/DS4_2020/train', help='Path to train dataset')
-parser.add_argument('--valDataroot', required=False, 
+parser.add_argument('--nyuDataroot',
+    default='../dataset/nyu/train', help='Path to train dataset (with t(x))')
+parser.add_argument('--valDataroot',
     default='../dataset/DS4_2020/val', help='Path to validation dataset')
-parser.add_argument('--outdir', required=False, 
+parser.add_argument('--outdir',
     default='./pretrained-model', help='path to saved model')
 
 parser.add_argument('--exp', type=str,
@@ -50,6 +52,10 @@ parser.add_argument('--netG', type=str,
 #     default=None, help="path to netD (to continue training)")
 parser.add_argument('--workers', type=int, 
     default=8, help='Number of data loading workers')
+parser.add_argument('--print_every', type=int,
+    default=10, help="Number of iterations to print")
+parser.add_argument('--val_every', type=int,
+    default=500, help="Number of iterations to validate")
 # parser.add_argument('--display', type=int, 
 #     default=5, help='interval for displaying train-logs')
 # parser.add_argument('--evalIter', type=int, 
