@@ -13,7 +13,7 @@ from PIL import Image, ImageFile
 # Set True to load truncated files
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-def is_image_file(filename):
+def is_image_file(filename) -> bool:
     """
     Parameters
     ----------
@@ -71,6 +71,3 @@ class DatasetFromFolder(data.Dataset):
 
     def __len__(self):
         return len(self.data_filenames)
-
-if __name__ == "__main__":
-    main()
