@@ -1,3 +1,5 @@
+""" Using author provided model to dehazing. """
+
 echo python3 dehazetest.py \
     && python3 dehazetest.py \
         --netG ./model/At_model2.pth \

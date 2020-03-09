@@ -190,7 +190,7 @@ def saveTrainingCurve(train_loss, val_loss, psnr, ssim, epoch, fname=None, linew
     if fname is not None:
         plt.savefig(fname)
 
-    plt.clf()
+    plt.close()
 
     return
 
