@@ -30,7 +30,7 @@ from datasets.data import DatasetFromFolder
 from misc_train import *
 from model.At_model import Dense
 from model.perceptual import vgg16ca
-from torchvision.transforms import Compose, Normalize, ToTensor
+from torchvision.transforms import Compose, Normalize, ToTensor, RandomHorizontalFlip, RandomVerticalFlip
 from utils.utils import norm_ip, norm_range
 
 os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
@@ -121,9 +121,21 @@ def val(data, target, model: nn.Module, criterion, perceptual=None, gamma=0, kap
 
     return dehaze, loss.item()
 
-def getDataLoaders(opt, transform):
+def getDataLoaders(opt, train_transform, val_transform):
+    """
+    Parameters
+    ----------
+    opt : Namespace
+
+    train_transform, val_transform : torchvision.transform
+    
+    Return
+    ------
+    ntire_train_loader, ntire_val_loader : DataLoader
+        
+    """
     ntire_train_loader = DataLoader(
-        dataset=DatasetFromFolder(opt.dataroot, transform=transform), 
+        dataset=DatasetFromFolder(opt.dataroot, transform=train_transform), 
         num_workers=opt.workers, 
         batch_size=opt.batchSize, 
         pin_memory=True, 
@@ -131,7 +143,7 @@ def getDataLoaders(opt, transform):
     )
 
     ntire_val_loader = DataLoader(
-        dataset=DatasetFromFolder(opt.valDataroot, transform=transform), 
+        dataset=DatasetFromFolder(opt.valDataroot, transform=val_transform), 
         num_workers=opt.workers, 
         batch_size=opt.valBatchSize, 
         pin_memory=True, 
@@ -152,30 +164,37 @@ def main():
     for key, value in vars(opt).items():
         print("{:20} {:>50}".format(key, str(value)))
 
-    img_transform = Compose([
+    train_transform = Compose([
+        RandomHorizontalFlip(),
+        RandomVerticalFlip(),
         ToTensor(), 
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    dataloader, valDataloader = getDataLoaders(opt, img_transform)
+    val_transform = Compose([
+        ToTensor(),
+        Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+    dataloader, valDataloader = getDataLoaders(opt, train_transform, val_transform)
 
     criterionMSE = nn.MSELoss()
     criterionMSE.cuda()
 
     # NOTE weight for L2 and Lp (i.e. Eq.(3) in the paper)
-    lambda2 = opt.lambda2
-    lambdaP = opt.lambdaP
     gamma = opt.lambdaG
     kappa = opt.lambdaK
 
     # Initialize VGG-16 with batch norm as Perceptual Loss
-    net_vgg = vgg16ca()
-    net_vgg.cuda()
-    net_vgg.eval()
+    net_vgg = None
+    if kappa != 0:
+        net_vgg = vgg16ca()
+        net_vgg.cuda()
+        net_vgg.eval()
 
     epochs = opt.niter
-    print_every = 10
-    val_every = 500
+    print_every = opt.print_every
+    val_every = opt.val_every
 
     running_loss = 0.0
     running_valloss, running_valpsnr, running_valssim = 0.0, 0.0, 0.0
@@ -195,9 +214,8 @@ def main():
             model.load_state_dict(torch.load(opt.netG)['model'])
         except:
             raise ValueError('Fail to load netG, check {}'.format(opt.netG))
-    else:
-        startepoch = 0
 
+    startepoch = 0
     model.cuda()
 
     # freezing encoder
@@ -235,15 +253,16 @@ def main():
 
             # Mapping Dehaze - Dehaze, with Perceptual Loss
             outputs    = model(data)[0]
-            outputsvgg = net_vgg(outputs)
-            targetvgg  = net_vgg(target)
             
             L2 = criterionMSE(outputs, target)
-            Lp = criterionMSE(outputsvgg[0], targetvgg[0])
-    
-            for j in range(1, 3):
-                Lp += criterionMSE(outputsvgg[j], targetvgg[j])
-            loss = lambda2*L2 + kappa*Lp
+
+            if kappa != 0:
+                outputsvgg = net_vgg(outputs)
+                targetvgg = net_vgg(target)
+                Lp = sum([criterionMSE(outputVGG, targetVGG) for (outputVGG, targetVGG) in zip(outputsvgg, targetvgg)])
+                loss = L2 + kappa * Lp
+            else:
+                loss = L2
             
             # Update parameters
             loss.backward()
@@ -269,17 +288,18 @@ def main():
 
                         # output, loss = val(data, target, model, criterionMSE, net_vgg, gamma=0, kappa=0)
 
-                        output    = model(data)[0]
-                        outputvgg = net_vgg(output)
-                        targetvgg = net_vgg(target)
-
+                        output = model(data)[0]
                         L2 = criterionMSE(output, target)
-                        Lp = criterionMSE(outputvgg[0], targetvgg[0].detach())
-                        
-                        for index in range(1, 3):
-                            Lp += criterionMSE(outputvgg[index], targetvgg[index].detach())
 
-                        loss = lambda2 * L2.item() + lambdaP * Lp.item()
+                        if kappa != 0:
+                            outputvgg = net_vgg(output)
+                            targetvgg = net_vgg(target)
+                            Lp = sum([criterionMSE(outputVGG, targetVGG.detach()) for (outputVGG, targetVGG) in zip(outputvgg, targetvgg)])
+                            loss = L2.item() + kappa * Lp.item()
+
+                        else:
+                            loss = L2.item()
+
                         running_valloss += loss
                         
                         # tensor to ndarr to get PSNR, SSIM

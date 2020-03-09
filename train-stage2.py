@@ -30,7 +30,7 @@ from datasets.data import DatasetFromFolder
 from misc_train import *
 from model.At_model import Dense
 from model.perceptual import perceptual, vgg16ca
-from torchvision.transforms import Compose, Normalize, ToTensor
+from torchvision.transforms import Compose, Normalize, ToTensor, RandomHorizontalFlip, RandomVerticalFlip
 from utils.utils import norm_ip, norm_range
 
 os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
@@ -68,7 +68,7 @@ def HazeLoss(haze, target, criterion, perceptual=None, kappa=0):
 
     return loss
 
-def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion, perceptual=None, gamma=0, kappa=0):
+def train(data, amap, tmap, target, model: nn.Module, optimizer: optim.Optimizer, criterion, perceptual=None, gamma=0, kappa=0):
     """
     Parameters
     ----------
@@ -83,13 +83,21 @@ def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion,
     """
     optimizer.zero_grad()
 
+    output = model(data)
+
     # DeHaze - Target Pair
-    dehaze = model(data)[0]
+    dehaze = output[0]
     loss = DehazeLoss(dehaze, target, criterion, perceptual, kappa=kappa) 
     
+    if amap is not None:
+        loss += criterion(output[1], amap)
+
+    if tmap is not None:
+        loss += criterion(output[2], tmap)
+
     # ReHaze - Data Pair
     if gamma != 0: 
-        rehaze = model(data)[3]
+        rehaze = model(data)[0]
         loss += gamma * HazeLoss(rehaze, data, criterion, perceptual, kappa=kappa)
 
     loss.backward()
@@ -121,33 +129,33 @@ def val(data, target, model: nn.Module, criterion, perceptual=None, gamma=0, kap
 
     return dehaze, loss.item()
 
-def getDataLoaders(opt, transform):
+def getDataLoaders(opt, train_transform, val_transform):
     ntire_train_loader = DataLoader(
-        dataset=DatasetFromFolder(opt.dataroot, transform=transform), 
+        dataset=DatasetFromFolder(opt.dataroot, transform=train_transform), 
         num_workers=opt.workers, 
         batch_size=opt.batchSize, 
         pin_memory=True, 
         shuffle=True
     )
 
-    ntire_val_loader = DataLoader(
-        dataset=DatasetFromFolder(opt.valDataroot, transform=transform), 
-        num_workers=opt.workers, 
-        batch_size=opt.valBatchSize, 
-        pin_memory=True, 
-        shuffle=True
-    )
-
     nyu_train_loader = getLoader(
-        dataroot=opt.dataroot,
-        transform=transform,
+        dataroot=opt.nyuDataroot,
+        transform=train_transform,
         batchSize=opt.batchSize,
         workers=opt.workers,
         shuffle=True,
         seed=opt.manualSeed
     )
 
-    return ntire_train_loader, ntire_val_loader, nyu_train_loader
+    ntire_val_loader = DataLoader(
+        dataset=DatasetFromFolder(opt.valDataroot, transform=val_transform), 
+        num_workers=opt.workers, 
+        batch_size=opt.valBatchSize, 
+        pin_memory=True, 
+        shuffle=True
+    )
+
+    return ntire_train_loader, nyu_train_loader, ntire_val_loader
 
 def main():
     opt = parser.parse_args()
@@ -161,30 +169,37 @@ def main():
     for key, value in vars(opt).items():
         print("{:20} {:>50}".format(key, str(value)))
 
-    img_transform = Compose([
+    train_transform = Compose([
+        RandomHorizontalFlip(),
+        RandomVerticalFlip(),
         ToTensor(), 
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    loader, loader2, valLoader = getDataLoaders(opt, img_transform)
+    val_transform = Compose([
+        ToTensor(),
+        Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
+    loader1, loader2, valLoader = getDataLoaders(opt, train_transform, val_transform)
 
     criterionMSE = nn.MSELoss()
     criterionMSE.cuda()
 
     # NOTE weight for L2 and Lp (i.e. Eq.(3) in the paper)
-    lambda2 = opt.lambda2
-    lambdaP = opt.lambdaP
     gamma = opt.lambdaG
     kappa = opt.lambdaK
 
     # Initialize VGG-16 with batch norm as Perceptual Loss
-    net_vgg = vgg16ca()
-    net_vgg.cuda()
-    net_vgg.eval()
+    net_vgg = None
+    if kappa != 0:
+        net_vgg = vgg16ca()
+        net_vgg.cuda()
+        net_vgg.eval()
 
-    epochs = opt.niter
-    print_every = 10
-    val_every = 500
+    epochs      = opt.niter
+    print_every = opt.print_every
+    val_every   = opt.val_every
 
     running_loss = 0.0
     running_valloss, running_valpsnr, running_valssim = 0.0, 0.0, 0.0
@@ -226,7 +241,7 @@ def main():
     min_valloss, min_valloss_epoch = 20.0, 0
     max_valpsnr, max_valpsnr_epoch = 0.0, 0
     max_valssim, max_valssim_epoch = 0.0, 0
-    
+   
     # Main Loop of training
     t0 = time.time()
     for epoch in range(startepoch, epochs):
@@ -235,18 +250,24 @@ def main():
         # Print Learning Rate
         print('Epoch:', epoch, 'LR:', scheduler.get_lr())
 
-        for i, (data, target) in enumerate(loader, 1):        
-            data, target = data.float().cuda(), target.float().cuda() # hazy, gt
-
-            loss = train(data, target, model, optimizer, criterionMSE, None, gamma=gamma, kappa=kappa)
-
+        for i, (patch1, patch2) in enumerate(zip(loader1, loader2), 1): 
+            # For NTIRE Dataset
+            data, target = patch1
+            data, target = data.float().cuda(), target.float().cuda() 
+            loss = train(data, None, None, target, model, optimizer, criterionMSE, net_vgg, gamma=gamma, kappa=kappa)
+            running_loss += loss
+            
+            # For NYU Dataset
+            data, amap, tmap, target = patch2
+            data, amap, tmap, target = data.float().cuda(), amap.float().cuda(), tmap.float().cuda(), target.float().cuda()
+            loss = train(data, amap, tmap, target, model, optimizer, criterionMSE, net_vgg, gamma=gamma, kappa=kappa)
             running_loss += loss
             
             if (i % print_every == 0): 
                 running_loss = running_loss / print_every
 
                 print('Epoch: {} [{:5d} / {:5d}] loss: {:.3f}'.format(
-                    epoch + 1, i, len(loader), running_loss))
+                    epoch + 1, i, min(len(loader1), len(loader2)), running_loss))
 
                 loss_dict['trainLoss'].append(running_loss)
                 running_loss = 0.0
@@ -326,7 +347,7 @@ def main():
                         loss_dict['valLoss'], 
                         loss_dict['valPSNR'], 
                         loss_dict['valSSIM'], 
-                        epoch + i / len(loader),
+                        epoch + i / min(len(loader1), len(loader2)),
                         fname='loss.png'
                     )
 

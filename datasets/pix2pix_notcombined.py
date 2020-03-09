@@ -69,13 +69,16 @@ class pix2pix_notcombined(data.Dataset):
         Return
         ------
         imgA: 
-            hazy
+            Hazy
 
         imgB: 
             img_A
         
         imgC: 
             img_t
+
+        imgD:
+            GT
         """ 
         hazy_path = self.root + '/I/I_' + str(index) + '.png'
         gt_path   = self.root + '/J/J_' + str(index) + '.png'

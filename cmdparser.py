@@ -36,14 +36,14 @@ parser.add_argument('--valBatchSize', type=int,
 #     default=64)
 parser.add_argument('--niter', type=int, 
     default=120, help='Number of epochs to train')
-parser.add_argument('--lambda2', type=float, 
-    default=1, help='Proportion of L2 Loss')
-parser.add_argument('--lambdaP', type=float, 
-    default=0.2, help='Proportion of Lp Loss')
+# parser.add_argument('--lambda2', type=float, 
+#     default=1.0, help='Proportion of L2 Loss')
+# parser.add_argument('--lambdaP', type=float, 
+#     default=0.2, help='Proportion of Lp Loss')
 parser.add_argument('--lambdaG', type=float, 
-    default=0, help='Proportion of Lp Loss')
+    default=0.0, help='Proportion of Rehaze Loss')
 parser.add_argument('--lambdaK', type=float, 
-    default=0, help='Proportion of Lp Loss')
+    default=0.0, help='Proportion of Perceptual Loss')
 parser.add_argument('--poolSize', type=int, 
     default=50, help='Buffer size for storing previously generated samples from G')
 parser.add_argument('--netG', type=str,
