@@ -16,9 +16,11 @@ import copy
 import random
 import numpy as np
 from joblib import Parallel, delayed
-from PIL import Image
+from PIL import Image, ImageFile
 # from scipy.misc import imsave
 from scipy.ndimage import rotate
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def random_augments(sp, num):
     """ Random crop and rotate augmentation """

@@ -4,30 +4,30 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', required=False, 
     default='pix2pix_notcombined',  help='')
 parser.add_argument('--dataroot', required=False, 
-    default='../dataset/DS2_2019/train', help='Path to train dataset')
+    default='../dataset/DS4_2020/train', help='Path to train dataset')
 parser.add_argument('--valDataroot', required=False, 
-    default='../dataset/DS2_2019/val', help='Path to validation dataset')
+    default='../dataset/DS4_2020/val', help='Path to validation dataset')
 parser.add_argument('--outdir', required=False, 
-    default='./pretrained-model/AtJ_DH.pth', help='path to saved model')
+    default='./pretrained-model', help='path to saved model')
 
 parser.add_argument('--exp', type=str,
     default='sample', help='Folder to output images and model checkpoints') 
-parser.add_argument('--outdir_CKPT', required=False, 
-    default='./pretrained-model/AtJ_DH_CKPT.pth', help='Path to checkpoint')
-parser.add_argument('--outdir_max', required=False, 
-    default='./pretrained-model/AtJ_DH_MaxCKPT.pth', help='Path to max checkpoint')
+# parser.add_argument('--outdir_CKPT', required=False, 
+#     default='./pretrained-model/AtJ_DH_CKPT.pth', help='Path to checkpoint')
+# parser.add_argument('--outdir_max', required=False, 
+#     default='./pretrained-model/AtJ_DH_MaxCKPT.pth', help='Path to max checkpoint')
 parser.add_argument('--batchSize', type=int, 
-    default=4, help='Input batch size when training')
+    default=2, help='Input batch size when training')
 parser.add_argument('--valBatchSize', type=int, 
     default=1, help='Input batch size when validation')
-parser.add_argument('--originalSize', type=int, 
-    default=480, help='the height / width of the original input image')
-parser.add_argument('--imageSize', type=int, 
-    default=480, help='the height / width of the cropped input image to network')
-parser.add_argument('--inputChannelSize', type=int, 
-    default=3, help='size of the input channels')
-parser.add_argument('--outputChannelSize', type=int, 
-    default=3, help='size of the output channels')
+# parser.add_argument('--originalSize', type=int, 
+#     default=480, help='the height / width of the original input image')
+# parser.add_argument('--imageSize', type=int, 
+#     default=480, help='the height / width of the cropped input image to network')
+# parser.add_argument('--inputChannelSize', type=int, 
+#     default=3, help='size of the input channels')
+# parser.add_argument('--outputChannelSize', type=int, 
+#     default=3, help='size of the output channels')
 # parser.add_argument('--ngf', type=int, 
 #     default=64)
 # parser.add_argument('--ndf', type=int, 
@@ -55,5 +55,3 @@ parser.add_argument('--workers', type=int,
 # parser.add_argument('--evalIter', type=int, 
 #     default=500, help='interval for evauating(generating) images from valDataroot')
 
-# opt = parser.parse_args()
-# print(opt)
