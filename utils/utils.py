@@ -32,7 +32,7 @@ def checkdirctexist(dirct):
         os.makedirs(dirct)
 
 def norm_ip(img, min, max):
-    """ Normalize **img** to 0 ~ 1 """
+    """ Linear normalize **img** """
     img.clamp_(min=min, max=max)
     img.add_(-min).div_(max - min)
 

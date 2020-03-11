@@ -7,3 +7,5 @@ echo python3 MAINTHREAD_test.py \
         --test ./test_images/NTIRE2020_RAW/test/Hazy \
         --outdir ./test_images/NTIRE2020_RAW/test/DeHazy
 
+echo cp ./test_images/NTIRE2020_RAW/test/DeHazy/* ./submission/ \
+    && cp ./test_images/NTIRE2020_RAW/test/DeHazy/* ./submission/
