@@ -83,13 +83,16 @@ def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion,
     """
     optimizer.zero_grad()
 
+    output = model(data)
+
     # DeHaze - Target Pair
-    dehaze = model(data)[0]
+    dehaze = output[0]
     loss = DehazeLoss(dehaze, target, criterion, perceptual, kappa=kappa) 
     
     # ReHaze - Data Pair
     if gamma != 0: 
-        rehaze = model(data)[3]
+        amap, tmap = output[1], output[2]
+        rehaze = target * tmap + amap * (1 - tmap)
         loss += gamma * HazeLoss(rehaze, data, criterion, perceptual, kappa=kappa)
 
     loss.backward()
@@ -110,13 +113,16 @@ def val(data, target, model: nn.Module, criterion, perceptual=None, gamma=0, kap
     kappa : float
         The ratio of criterion and perceptual loss.
     """
+    output = model(data)
+
     # DeHaze - Target Pair
-    dehaze = model(data)[0]
+    dehaze = output[0]
     loss = DehazeLoss(dehaze, target, criterion, perceptual) 
     
     # ReHaze - Data Pair
-    if gamma != 0: 
-        rehaze = model(data)[3]
+    if gamma != 0:
+        amap, tmap = output[1], output[2]
+        rehaze = target * tmap + amap * (1 - tmap)
         loss += gamma * HazeLoss(rehaze, data, criterion, perceptual)    
 
     return dehaze, loss.item()
@@ -165,8 +171,8 @@ def main():
         print("{:20} {:>50}".format(key, str(value)))
 
     train_transform = Compose([
-        RandomHorizontalFlip(),
-        RandomVerticalFlip(),
+        # RandomHorizontalFlip(),
+        # RandomVerticalFlip(),
         ToTensor(), 
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
@@ -220,9 +226,10 @@ def main():
 
     # freezing encoder
     for i, child in enumerate(model.children()):
-        if i < 12: 
-            for param in child.parameters(): 
-                param.requires_grad = False 
+        if i == 12: break
+
+        for param in child.parameters(): 
+            param.requires_grad = False 
 
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
@@ -252,7 +259,7 @@ def main():
             optimizer.zero_grad()
 
             # Mapping Dehaze - Dehaze, with Perceptual Loss
-            outputs    = model(data)[0]
+            outputs = model(data)[0]
             
             L2 = criterionMSE(outputs, target)
 
@@ -261,6 +268,7 @@ def main():
                 targetvgg = net_vgg(target)
                 Lp = sum([criterionMSE(outputVGG, targetVGG) for (outputVGG, targetVGG) in zip(outputsvgg, targetvgg)])
                 loss = L2 + kappa * Lp
+
             else:
                 loss = L2
             
@@ -300,8 +308,7 @@ def main():
                         else:
                             loss = L2.item()
 
-                        running_valloss += loss
-                        
+                       
                         # tensor to ndarr to get PSNR, SSIM
                         tensors = [output.data.cpu(), target.data.cpu()]
                         npimgs = [] 
@@ -317,6 +324,8 @@ def main():
                         # Calculate PSNR and SSIM
                         psnr = peak_signal_noise_ratio(npimgs[0], npimgs[1])
                         ssim = structural_similarity(npimgs[0], npimgs[1], multichannel = True)
+
+                        running_valloss += loss
                         running_valpsnr += psnr
                         running_valssim += ssim 
 

@@ -42,7 +42,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Pytorch AtJ_model Evaluation")
     parser.add_argument("--cuda", action="store_true", 
-        default=True, help="use cuda? Default is True")
+        help="use cuda? Default is True")
     parser.add_argument("--model", type=str, 
         default="./model/At_model2.pth")
     parser.add_argument("--test", type=str, 

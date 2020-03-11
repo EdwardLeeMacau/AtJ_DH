@@ -277,6 +277,6 @@ class Dense(nn.Module):
         T = torch.cat([T, T, T], 1)
         
         dehaze = (x - A * (1 - T)) / T
-        haze   = x * T + A * (1 - T)
+        # haze   = x * T + A * (1 - T)
 
-        return dehaze, A, T, haze
+        return dehaze, A, T#, haze

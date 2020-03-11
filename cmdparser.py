@@ -1,8 +1,8 @@
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', 
-    default='pix2pix_notcombined',  help='')
+# parser.add_argument('--dataset', 
+#     default='pix2pix_notcombined',  help='')
 parser.add_argument('--dataroot', 
     default='../dataset/DS4_2020/train', help='Path to train dataset')
 parser.add_argument('--nyuDataroot',
