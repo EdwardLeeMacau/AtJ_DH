@@ -192,8 +192,9 @@ def main():
 
     # Initialize VGG-16 with batch norm as Perceptual Loss
     net_vgg = None
+
     if kappa != 0:
-        net_vgg = vgg16ca()
+        net_vgg = perceptual(vgg16ca(), nn.MSELoss())
         net_vgg.cuda()
         net_vgg.eval()
 
@@ -266,8 +267,10 @@ def main():
             if (i % print_every == 0): 
                 running_loss = running_loss / print_every
 
-                print('Epoch: {} [{:5d} / {:5d}] loss: {:.3f}'.format(
-                    epoch + 1, i, min(len(loader1), len(loader2)), running_loss))
+                print('Epoch: {:2d} ({:3d} h {:3d} min {:3d} s) [{:5d} / {:5d}] loss: {:.3f}'.format(
+                    epoch + 1, int((time.time() - t0) // 3600), int(((time.time() - t0) // 60) % 60), int(((time.time()) - t0) % 60),
+                    i, min(len(loader1), len(loader2)), running_loss)
+                )
 
                 loss_dict['trainLoss'].append(running_loss)
                 running_loss = 0.0
@@ -311,10 +314,7 @@ def main():
                     loss_dict['valPSNR'].append(running_valpsnr)
                     loss_dict['valSSIM'].append(running_valssim)
 
-                    print('[epoch %d] valloss: %.3f' % (epoch+1, running_valloss))
-                    print('[epoch %d] valpsnr: %.3f' % (epoch+1, running_valpsnr))
-                    print('[epoch %d] valssim: %.3f' % (epoch+1, running_valssim))
-                    
+                   
                     # Save if update the best
                     if running_valloss < min_valloss:
                         min_valloss = running_valloss
@@ -351,17 +351,22 @@ def main():
                         fname='loss.png'
                     )
 
+                    # Show Message
+                    print('>> Epoch {:d} VALIDATION: Loss: {:.3f}, PSNR: {:.3f}, SSIM: {:.3f}'.format(
+                        epoch+1, running_valloss, running_valpsnr, running_valssim)
+                    )
+
+                    print('>> Best Epoch: {:d}, PSNR: {:.3f}'.format(
+                        max_valpsnr_epoch, max_valpsnr
+                    )
+
+                    # Reset Meter
                     running_valloss = 0.0
                     running_valpsnr = 0.0
                     running_valssim = 0.0
 
                 model.train()
-
-        # Print records over all epoches
-        print('min_valloss_epoch %d: valloss %.3f' % (min_valloss_epoch, min_valloss))
-        print('max_valpsnr_epoch %d: valpsnr %.3f' % (max_valpsnr_epoch, max_valpsnr))
-        print('max_valssim_epoch %d: valssim %.3f' % (max_valssim_epoch, max_valssim))
-        
+       
         # Save checkpoint
         torch.save(
             {
@@ -378,8 +383,6 @@ def main():
         scheduler.step()
         
     print('FINISHED TRAINING')
-    t1 = time.time()
-    print('running time:' + str(t1 - t0))
     torch.save(model.state_dict(), os.path.join(opt.outdir, 'AtJ_DH.pth'))
 
 if __name__ == '__main__':

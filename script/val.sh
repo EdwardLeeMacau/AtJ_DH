@@ -1,12 +1,14 @@
-""" Using self trained model to dehazing. """
+# Using self trained model to dehazing. 
 
 echo python3 MAINTHREAD_test.py \
     && python3 MAINTHREAD_test.py \
         --cuda \
-        --model ./pretrained_model/AtJ_DH_MaxCKPT.pth \
+        --normalize \
+        --model ./pretrained-model/AtJ_DH_MODEL.pth \
         --test ./test_images/NTIRE2020_RAW/val/Hazy \
         --gt ./test_image/NTIRE2020_RAW/val/GT \
         --outdir ./test_images/NTIRE2020_RAW/val/DeHazy \
+        --parse ./test_images/NTIRE2020_RAW/val/Parse \
         --rehaze ./test_images/NTIRE2020_RAW/val/ReHazy
 
 echo python3 metric.py \

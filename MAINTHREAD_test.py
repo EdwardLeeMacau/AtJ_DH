@@ -19,7 +19,7 @@ from model.At_model import Dense
 from utils import utils
 # from At_model_feature import Dense
 from utils.utils import norm_ip, norm_range
-
+from torchvision.transforms import Compose, Normalize, ToTensor
 
 def saveImage(tensor, H, W, pad, fname):
     tensor = torch.squeeze(tensor)
@@ -52,8 +52,11 @@ def main():
         help='path to output folder')
     parser.add_argument('--gt', type=str, 
         help='path to GT folder')
+    parser.add_argument('--parse', type=str,
+        help='path to A(x), t(x) folder')
     parser.add_argument('--rehaze', type=str, 
         help='path to output folder')
+    parser.add_argument('--normalize', action='store_true')
     opt = parser.parse_args()
 
     device_label = 'GPU' if opt.cuda else 'CPU'
@@ -66,6 +69,8 @@ def main():
               ">>To run on GPU, please run the script with --cuda option")
 
     utils.checkdirctexist(opt.outdir)
+    if opt.parse is not None:
+        utils.checkdirctexist(opt.parse)
     if opt.rehaze is not None:
         utils.checkdirctexist(opt.rehaze)
 
@@ -87,6 +92,11 @@ def main():
     avg_elapsed_time = 0.0
     pad = 6
 
+    img_transform = Compose([
+        ToTensor(),
+        Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    ])
+
     # DeHaze
     with torch.no_grad():
         haze_imgs = sorted(glob.glob(os.path.join(opt.test, '*.png')))
@@ -96,7 +106,15 @@ def main():
 
             # Data Preparing
             haze, W, H = utils.get_image_for_test(haze_img, pad=pad)
-            haze = torch.from_numpy(haze).float()
+            
+            if not opt.normalize:
+                haze = torch.from_numpy(haze).float()
+            
+            if opt.normalize:
+                haze = np.rollaxis(np.squeeze(haze, axis=0), 0, 3)
+                haze = img_transform(haze)
+                haze = torch.unsqueeze(haze, dim=0)
+            
             haze = haze.cuda() if opt.cuda else haze.cpu()
             
             # compute running time
@@ -104,31 +122,33 @@ def main():
 
             # feeding forward
             dehaze, A, t = model(haze)
+
+            # Take it out
+            dehaze, A, t = dehaze.cpu(), A.cpu(), t.cpu()
+            
+            if opt.normalize:
+                dehaze.mul_(torch.Tensor([0.229, 0.224, 0.225]).reshape(3, 1, 1)).add_(torch.Tensor([0.485, 0.456, 0.406]).reshape(3, 1, 1))
             
             # compute running time
             elapsed_time = time.time() - start_time
             avg_elapsed_time += elapsed_time
 
             # Save Output to new directory
-            haze_img = os.path.basename(haze_img)
+            dehaze_img = os.path.basename(haze_img)
 
-            tensor = dehaze.data.cpu()
-            saveImage(tensor, H, W, pad, os.path.join(opt.outdir, haze_img))
-
-            tensor = A.data.cpu()
-            saveImage(tensor, H, W, pad, os.path.join(opt.outdir, haze_img.split('.')[0] + '_a.png'))
-
-            tensor = t.data.cpu()
-            saveImage(tensor, H, W, pad, os.path.join(opt.outdir, haze_img.split('.')[0] + '_t.png'))
+            saveImage(dehaze, H, W, pad, os.path.join(opt.outdir, dehaze_img))
+            saveImage(A, H, W, pad, os.path.join(opt.parse, dehaze_img.split('.')[0] + '_a.png'))
+            saveImage(t, H, W, pad, os.path.join(opt.parse, dehaze_img.split('.')[0] + '_t.png'))
+            saveImage(A * (1 - t), H, W, pad, os.path.join(opt.parse, dehaze_img.split('.')[0] + '_sub.png'))
 
     # Dehaze time count
     print(">> Finished!")
-    print("It takes average {}s for processing single image on {}".format(
+    print(">> It takes average {}s for processing single image on {}".format(
         avg_elapsed_time / len(gt_imgs), device_label))
-    print("Results are saved at {}".format(opt.outdir))
+    print(">> Results are saved at {}".format(opt.outdir))
 
     if opt.gt is None:
-        print("No ground truth images are provided, can't rehaze images. ")
+        print(">> No ground truth images are provided, can't rehaze images. ")
         return
 
     # ReHaze
@@ -152,12 +172,6 @@ def main():
 
             tensor = gt_img * t + A * (1 - t)
             saveImage(tensor, H, W, pad, os.path.join(opt.rehaze, haze_img))
-
-            # tensor = A.data.cpu()
-            # saveImage(tensor, H, W, pad, os.path.join(opt.rehaze, haze_img.split('.')[0] + '_a.png'))
-
-            # tensor = t.data.cpu()
-            # saveImage(tensor, H, W, pad, os.path.join(opt.rehaze, haze_img.split('.')[0] + '_t.png'))
 
 if __name__ == "__main__":
     main()

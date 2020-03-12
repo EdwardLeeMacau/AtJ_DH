@@ -21,12 +21,14 @@ def main():
     psnr_list = []
     ssim_list = []
 
-    for i in range(0, 5):
-        GTimg = Image.open(os.path.join(opt.GT_dir, str(i) + '.png'))
-        # GTimg = GTimg.resize( (480, 480))
+    GTimgs = [ os.path.join(opt.GT_dir, img_name) for img_name in sorted(os.listdir(opt.GT_dir)) ]
+    DHimgs = [ os.path.join(opt.DH_dir, img_name) for img_name in sorted(os.listdir(opt.DH_dir)) ]
+
+    for GT_img_name, DH_img_name in zip(GTimgs, DHimgs):
+        GTimg = Image.open(GT_img_name)
         GTimg = np.array(GTimg)
         
-        DHimg = Image.open(os.path.join(opt.DH_dir, str(i) + '.png'))
+        DHimg = Image.open(DH_img_name)
         DHimg = np.array(DHimg)
 
         psnr = compare_psnr(GTimg, DHimg)

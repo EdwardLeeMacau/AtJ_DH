@@ -71,6 +71,7 @@ def get_image_for_test(image_name, pad=6):
         Hk = H + (32 * pad - H % 32)
     img = np.pad(img, ((32*pad, Hk - H), (32*pad, Wk - W), (0, 0)), 'reflect')
     im_input = img / 255.0
+    
     im_input = np.expand_dims(np.rollaxis(im_input, 2), axis=0)
 
     return im_input, W, H
@@ -115,7 +116,7 @@ def norm(tensor):
     mean=(0.5, 0.5, 0.5)
     std=(0.5, 0.5, 0.5)
    
-      # TODO: make efficient
+    # TODO: make efficient
     for t, m, s in zip(tensor, mean, std):
         t.sub_(m).div_(s)
   
