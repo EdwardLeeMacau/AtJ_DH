@@ -137,6 +137,7 @@ def saveTrainingCurve(train_loss, val_loss, psnr, ssim, epoch, fname=None, linew
         Default linewidth
     """
     fig, axs = plt.subplots(2, 1, sharex=True, figsize=(19.2, 10.8))
+    downSampleRate = 10
 
     # Linear scale of loss curve
     ax = axs[0]
@@ -147,9 +148,10 @@ def saveTrainingCurve(train_loss, val_loss, psnr, ssim, epoch, fname=None, linew
         color='red', 
         linewidth=linewidth
     )
+    # Downsample trainLoss
     line2, = ax.plot(
-        np.linspace(0, epoch, len(train_loss)),
-        train_loss, 
+        np.linspace(0, epoch, len(train_loss) // downSampleRate),
+        np.array(train_loss)[::downSampleRate], 
         label="Train Loss", 
         color='blue', 
         linewidth=linewidth
