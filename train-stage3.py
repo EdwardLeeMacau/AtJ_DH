@@ -48,12 +48,16 @@ def DehazeLoss(dehaze, target, criterion, perceptual=None, kappa=0):
         The ratio of criterion and perceptual loss.
     """
     loss = criterion(dehaze, target)
+
     if perceptual is not None: 
-        loss += kappa * perceptual(dehaze, target)
+        dehaze_p1, dehaze_p2, dehaze_p3 = perceptual(dehaze)
+        target_p1, target_p2, target_p3 = perceptual(target)
+
+        loss += kappa * (criterion(dehaze_p1, target_p1) + criterion(dehaze_p2, target_p2) + criterion(dehaze_p3, target_p3))
     
     return loss
 
-def HazeLoss(haze, target, criterion, perceptual=None, kappa=0):
+def HazeLoss(rehaze, target, criterion, perceptual=None, kappa=0):
     """
     Parameters
     ----------
@@ -63,9 +67,13 @@ def HazeLoss(haze, target, criterion, perceptual=None, kappa=0):
     kappa : float
         The ratio of criterion and perceptual loss.
     """
-    loss = criterion(haze, target)
+    loss = criterion(rehaze, target)
+
     if perceptual is not None: 
-        loss += kappa * perceptual(haze, target)
+        rehaze_p1, rehaze_p2, rehaze_p3 = perceptual(rehaze)
+        target_p1, target_p2, target_p3 = perceptual(target)
+        
+        loss += kappa * (criterion(rehaze_p1, target_p1) + criterion(rehaze_p2, target_p2) + criterion(rehaze_p3, target_p3))
 
     return loss
 
@@ -192,9 +200,11 @@ def main():
     gamma = opt.lambdaG
     kappa = opt.lambdaK
 
-    net_vgg = perceptual(vgg16ca(), criterionMSE())
-    net_vgg.cuda()
-    net_vgg.eval()
+    net_vgg = None
+    if opt.lambdaK != 0:
+        net_vgg = vgg16ca()
+        net_vgg.cuda()
+        net_vgg.eval()
 
     epochs = opt.niter
     print_every = opt.print_every
@@ -202,13 +212,6 @@ def main():
 
     running_loss = 0.0
     valLoss, valPSNR, valSSIM = 0.0, 0.0, 0.0
-
-    loss_dict = {
-        'trainLoss': [],
-        'valLoss': [],
-        'valPSNR': [],
-        'valSSIM': [],
-    }
 
     # netG = atj.AtJ()
     model = Dense()
@@ -229,6 +232,7 @@ def main():
         for param in child.parameters(): 
             param.requires_grad = False 
 
+    # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
         lr = 0.0001, 
@@ -243,6 +247,7 @@ def main():
 
     # Main Loop of training
     t0 = time.time()
+
     with SummaryWriter(comment='AtJ_DH') as writer:
         for epoch in range(startepoch, epochs):
             model.train() 
@@ -251,11 +256,11 @@ def main():
             print('Epoch:', epoch, 'LR:', scheduler.get_lr())
 
             for i, (data, target) in enumerate(dataloader, 1): 
-                data, target = data.float().cuda(), target.float().cuda() # hazy, gt
+                data, target = data.float().cuda(), target.float().cuda() 
 
                 loss = train(data, target, model, optimizer, criterionMSE, net_vgg, gamma=gamma, kappa=kappa)
 
-                running_loss += loss# .item()
+                running_loss += loss
                 
                 # Print Loop
                 if (i % print_every == 0):
@@ -265,8 +270,7 @@ def main():
                         epoch + 1, int((time.time() - t0) // 3600), int(((time.time() - t0) // 60) % 60), int(((time.time()) - t0) % 60),
                         i, len(dataloader), running_loss))
 
-                    loss_dict['trainLoss'].append(running_loss)
-                    running_loss = 0.0
+                    writer.add_scalar('./scalar/trainLoss', running_loss, epoch * len(dataloader) + i)
 
                 # Validation Loop
                 if (i % val_every == 0):
@@ -276,7 +280,7 @@ def main():
                         for j, (data, target) in enumerate(valDataloader, 1):
                             data, target = data.float().cuda(), target.float().cuda()
 
-                            output, loss = val(data, target, model, criterionMSE, net_vgg, gamma=0, kappa=0)
+                            output, loss = val(data, target, model, criterionMSE)
 
                             # tensor to ndarr to get PSNR, SSIM
                             tensors = [output.data.cpu(), target.data.cpu()]
@@ -306,18 +310,12 @@ def main():
                         writer.add_scalar('./scalar/valLoss', valLoss, epoch * len(dataloader) + i)
                         writer.add_scalar('./scalar/valPSNR', valPSNR, epoch * len(dataloader) + i)
                         writer.add_scalar('./scalar/valSSIM', valSSIM, epoch * len(dataloader) + i)
-
-                        print('[epoch %d] valloss: %.3f' % (epoch+1, valLoss))
-                        print('[epoch %d] valpsnr: %.3f' % (epoch+1, valPSNR))
-                        print('[epoch %d] valssim: %.3f' % (epoch+1, valSSIM))
-                        
+                       
                         # Save if update the best
                         if valLoss < min_valloss:
                             min_valloss = valLoss
                             min_valloss_epoch = epoch + 1
                         
-                        # Save if update the best
-                        # save model at the largest valpsnr
                         if valPSNR > max_valpsnr:
                             max_valpsnr = valPSNR
                             max_valpsnr_epoch = epoch + 1
@@ -332,14 +330,13 @@ def main():
                                 os.path.join(opt.outdir, 'AtJ_DH_MaxCKPT.pth')
                             ) 
 
-                        # Save if update the best
                         if valSSIM > max_valssim:
                             max_valssim = valSSIM
                             max_valssim_epoch = epoch + 1
 
                     # Show Message
                     print('>> Epoch {:d} VALIDATION: Loss: {:.3f}, PSNR: {:.3f}, SSIM: {:.3f}'.format(
-                        epoch+1, valLoss, valPSNR, valSSIM))
+                        epoch + 1, valLoss, valPSNR, valSSIM))
 
                     print('>> Best Epoch: {:d}, PSNR: {:.3f}'.format(
                         max_valpsnr_epoch, max_valpsnr))
