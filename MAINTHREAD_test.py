@@ -21,9 +21,8 @@ from utils import utils
 from utils.utils import norm_ip, norm_range
 from torchvision.transforms import Compose, Normalize, ToTensor
 
-def saveImage(tensor, H, W, pad, fname):
+def saveImage(tensor: torch.Tensor, H: int, W: int, pad, fname: str):
     tensor = torch.squeeze(tensor)
-
     # tensor = norm_range(tensor, None)
 
     # Crop Image and Scale to 0 - 255
@@ -38,7 +37,6 @@ def saveImage(tensor, H, W, pad, fname):
     im.save(fname)
 
     return
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -69,8 +67,10 @@ def main():
               ">>To run on GPU, please run the script with --cuda option")
 
     utils.checkdirctexist(opt.outdir)
+
     if opt.parse is not None:
         utils.checkdirctexist(opt.parse)
+
     if opt.rehaze is not None:
         utils.checkdirctexist(opt.rehaze)
 
@@ -126,8 +126,8 @@ def main():
             # Take it out
             dehaze, A, t = dehaze.cpu(), A.cpu(), t.cpu()
             
-            if opt.normalize:
-                dehaze.mul_(torch.Tensor([0.229, 0.224, 0.225]).reshape(3, 1, 1)).add_(torch.Tensor([0.485, 0.456, 0.406]).reshape(3, 1, 1))
+            # if opt.normalize:
+            #     dehaze.mul_(torch.Tensor([0.229, 0.224, 0.225]).reshape(3, 1, 1)).add_(torch.Tensor([0.485, 0.456, 0.406]).reshape(3, 1, 1))
             
             # compute running time
             elapsed_time = time.time() - start_time

@@ -1,4 +1,4 @@
-""" Using self trained model to dehazing. """
+# Using self trained model to dehazing.
 
 echo python3 MAINTHREAD_test.py \
     && python3 MAINTHREAD_test.py \
@@ -6,6 +6,7 @@ echo python3 MAINTHREAD_test.py \
         --model ./model/At_model2.pth \
         --test ./test_images/NTIRE2019_RAW/test/Hazy \
         --gt ./test_image/NTIRE2019_RAW/test/GT \
+        --parse ./test_image/NTIRE2019_RAW/test/Parse \
         --outdir ./test_images/NTIRE2019_RAW/test/DeHazy \
         --rehaze ./test_images/NTIRE2019_RAW/test/ReHazy
 

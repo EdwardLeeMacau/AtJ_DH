@@ -70,6 +70,9 @@ def getDataLoaders(opt, train_transform, val_transform):
 def main():
     opt = parser.parse_args()
 
+    if opt.netG is None:
+        raise ValueError("netG should not be None.")
+
     if not os.path.exists(opt.netG):
         raise ValueError("netG {} doesn't exist".format(opt.netG))
 
@@ -84,7 +87,7 @@ def main():
         print("{:20} {:>50}".format(key, str(value)))
 
     train_transform = Compose([
-        ToTensor(), 
+        ToTensor(),
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
@@ -93,7 +96,7 @@ def main():
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    dataloader, valDataloader = getDataLoaders(opt, train_transform, val_transform)
+    _, valDataloader = getDataLoaders(opt, train_transform, val_transform)
 
     criterionMSE = nn.MSELoss()
     criterionMSE.cuda()
@@ -106,21 +109,33 @@ def main():
 
     # Main Loop of training
     t0 = time.time()
+    valloss = 0
+    valpsnr = 0
+    valssim = 0
 
     with torch.no_grad():
-        for j, (data, target) in enumerate(valDataloader, 1):
+        for i, (data, target) in enumerate(valDataloader, 1):
             data, target = data.float().cuda(), target.float().cuda()
 
+            print(data.shape)
             output = model(data)[0]
-            L2 = criterionMSE(output, target)
-            loss = L2.item()
+            loss = criterionMSE(output, target).item()
             
             # tensor to ndarr to get PSNR, SSIM
-            tensors = [output.data.cpu(), target.data.cpu()]
+            output, target = output.cpu(), target.cpu()
+
+            # if opt.normalize:
+            output.mul_(torch.Tensor([0.229, 0.224, 0.225]).reshape(3, 1, 1)).add_(torch.Tensor([0.485, 0.456, 0.406]).reshape(3, 1, 1))
+            output = torch.squeeze(output)
+
+            target.mul_(torch.Tensor([0.229, 0.224, 0.225]).reshape(3, 1, 1)).add_(torch.Tensor([0.485, 0.456, 0.406]).reshape(3, 1, 1))
+            target = torch.squeeze(target)
+
+            tensors = [output, target]
             npimgs = [] 
 
             for t in tensors: 
-                t = torch.squeeze(t)
+                # t = torch.squeeze(t)
                 t = norm_range(t, None)
 
                 npimg = t.mul(255).byte().numpy()
@@ -131,19 +146,21 @@ def main():
             psnr = peak_signal_noise_ratio(npimgs[0], npimgs[1])
             ssim = structural_similarity(npimgs[0], npimgs[1], multichannel = True)
 
-            running_valloss += loss
-            running_valpsnr += psnr
-            running_valssim += ssim 
+            valloss += loss
+            valpsnr += psnr
+            valssim += ssim 
+
+            # Show Message
+            print('>> [{:3d}/{:3d}] Loss: {:.3f}, PSNR: {:.3f}, SSIM: {:.3f}'.format(i, len(valDataloader), loss, psnr, ssim))
 
         # Print Summary
-        running_valloss = running_valloss / len(valDataloader)
-        running_valpsnr = running_valpsnr / len(valDataloader)
-        running_valssim = running_valssim / len(valDataloader)
+        valloss = valloss / len(valDataloader)
+        valpsnr = valpsnr / len(valDataloader)
+        valssim = valssim / len(valDataloader)
 
-        
     # Show Message
     print('>> VALIDATION: Loss: {:.3f}, PSNR: {:.3f}, SSIM: {:.3f}'.format(
-        running_valloss, running_valpsnr, running_valssim))
+        valloss, valpsnr, valssim))
     
 if __name__ == '__main__':
     main()

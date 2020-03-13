@@ -353,12 +353,10 @@ def main():
 
                     # Show Message
                     print('>> Epoch {:d} VALIDATION: Loss: {:.3f}, PSNR: {:.3f}, SSIM: {:.3f}'.format(
-                        epoch+1, running_valloss, running_valpsnr, running_valssim)
-                    )
+                        epoch+1, running_valloss, running_valpsnr, running_valssim))
 
                     print('>> Best Epoch: {:d}, PSNR: {:.3f}'.format(
-                        max_valpsnr_epoch, max_valpsnr
-                    )
+                        max_valpsnr_epoch, max_valpsnr))
 
                     # Reset Meter
                     running_valloss = 0.0
