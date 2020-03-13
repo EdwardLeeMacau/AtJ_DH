@@ -201,7 +201,7 @@ def main():
     kappa = opt.lambdaK
 
     net_vgg = None
-    if opt.lambdaK != 0:
+    if kappa != 0:
         net_vgg = vgg16ca()
         net_vgg.cuda()
         net_vgg.eval()
@@ -212,6 +212,10 @@ def main():
 
     running_loss = 0.0
     valLoss, valPSNR, valSSIM = 0.0, 0.0, 0.0
+
+    min_valloss, min_valloss_epoch = 20.0, 0
+    max_valpsnr, max_valpsnr_epoch = 0.0, 0
+    max_valssim, max_valssim_epoch = 0.0, 0
 
     # netG = atj.AtJ()
     model = Dense()
@@ -241,10 +245,6 @@ def main():
 
     scheduler = StepLR(optimizer, step_size=35, gamma=0.7)
 
-    min_valloss, min_valloss_epoch = 20.0, 0
-    max_valpsnr, max_valpsnr_epoch = 0.0, 0
-    max_valssim, max_valssim_epoch = 0.0, 0
-
     # Main Loop of training
     t0 = time.time()
 
@@ -252,15 +252,29 @@ def main():
         for epoch in range(startepoch, epochs):
             model.train() 
 
-            # Print Learning Rate
-            print('Epoch:', epoch, 'LR:', scheduler.get_lr())
-
             for i, (data, target) in enumerate(dataloader, 1): 
                 data, target = data.float().cuda(), target.float().cuda() 
 
-                loss = train(data, target, model, optimizer, criterionMSE, net_vgg, gamma=gamma, kappa=kappa)
+                optimizer.zero_grad()
 
-                running_loss += loss
+                # Mapping Dehaze - Dehaze, with Perceptual Loss
+                outputs = model(data)[0]
+                
+                L2 = criterionMSE(outputs, target)
+
+                if kappa != 0:
+                    outputsvgg = net_vgg(outputs)
+                    targetvgg = net_vgg(target)
+                    Lp = sum([criterionMSE(outputVGG, targetVGG) for (outputVGG, targetVGG) in zip(outputsvgg, targetvgg)])
+                    loss = L2 + kappa * Lp
+
+                else:
+                    loss = L2
+                
+                # Update parameters
+                loss.backward()
+                optimizer.step()
+                running_loss += loss.item()
                 
                 # Print Loop
                 if (i % print_every == 0):
@@ -280,8 +294,18 @@ def main():
                         for j, (data, target) in enumerate(valDataloader, 1):
                             data, target = data.float().cuda(), target.float().cuda()
 
-                            output, loss = val(data, target, model, criterionMSE)
+                            output = model(data)[0]
+                            L2 = criterionMSE(output, target)
 
+                            if kappa != 0:
+                                outputvgg = net_vgg(output)
+                                targetvgg = net_vgg(target)
+                                Lp = sum([criterionMSE(outputVGG, targetVGG.detach()) for (outputVGG, targetVGG) in zip(outputvgg, targetvgg)])
+                                loss = L2.item() + kappa * Lp.item()
+
+                            else:
+                                loss = L2.item()
+                                
                             # tensor to ndarr to get PSNR, SSIM
                             tensors = [output.data.cpu(), target.data.cpu()]
                             npimgs = [] 

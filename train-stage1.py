@@ -138,7 +138,7 @@ def getDataLoaders(opt, train_transform, val_transform):
     Return
     ------
     ntire_train_loader, ntire_val_loader : DataLoader
-        
+        TrainLoader and ValidationLoader
     """
     ntire_train_loader = DataLoader(
         dataset=DatasetFromFolder(opt.dataroot, transform=train_transform), 
@@ -203,7 +203,11 @@ def main():
     val_every = opt.val_every
 
     running_loss = 0.0
-    running_valloss, running_valpsnr, running_valssim = 0.0, 0.0, 0.0
+    valLoss, valPSNR, valSSIM = 0.0, 0.0, 0.0
+
+    min_valloss, min_valloss_epoch = 20.0, 0
+    max_valpsnr, max_valpsnr_epoch = 0.0, 0
+    max_valssim, max_valssim_epoch = 0.0, 0
 
     loss_dict = {
         'trainLoss': [],
@@ -231,6 +235,7 @@ def main():
         for param in child.parameters(): 
             param.requires_grad = False 
 
+    # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
         lr = 0.0001, 
@@ -239,17 +244,11 @@ def main():
 
     scheduler = StepLR(optimizer, step_size=35, gamma=0.7)
 
-    min_valloss, min_valloss_epoch = 20.0, 0
-    max_valpsnr, max_valpsnr_epoch = 0.0, 0
-    max_valssim, max_valssim_epoch = 0.0, 0
-
+    
     # Main Loop of training
     t0 = time.time()
     for epoch in range(startepoch, epochs):
         model.train() 
-
-        # Print Learning Rate
-        print('Epoch:', epoch, 'LR:', scheduler.get_lr())
 
         for i, (data, target) in enumerate(dataloader, 1): 
             data, target = data.float().cuda(), target.float().cuda() # hazy, gt
@@ -325,32 +324,26 @@ def main():
                         psnr = peak_signal_noise_ratio(npimgs[0], npimgs[1])
                         ssim = structural_similarity(npimgs[0], npimgs[1], multichannel = True)
 
-                        running_valloss += loss
-                        running_valpsnr += psnr
-                        running_valssim += ssim 
+                        valLoss += loss
+                        valPSNR += psnr
+                        valSSIM += ssim 
 
                     # Print Summary
-                    running_valloss = running_valloss / len(valDataloader)
-                    running_valpsnr = running_valpsnr / len(valDataloader)
-                    running_valssim = running_valssim / len(valDataloader)
+                    valLoss = valLoss / len(valDataloader)
+                    valPSNR = valPSNR / len(valDataloader)
+                    valSSIM = valSSIM / len(valDataloader)
 
-                    loss_dict['valLoss'].append(running_valloss)
-                    loss_dict['valPSNR'].append(running_valpsnr)
-                    loss_dict['valSSIM'].append(running_valssim)
-
-                    print('[epoch %d] valloss: %.3f' % (epoch+1, running_valloss))
-                    print('[epoch %d] valpsnr: %.3f' % (epoch+1, running_valpsnr))
-                    print('[epoch %d] valssim: %.3f' % (epoch+1, running_valssim))
+                    loss_dict['valLoss'].append(valLoss)
+                    loss_dict['valPSNR'].append(valPSNR)
+                    loss_dict['valSSIM'].append(valSSIM)
                     
                     # Save if update the best
-                    if running_valloss < min_valloss:
-                        min_valloss = running_valloss
+                    if valLoss < min_valloss:
+                        min_valloss = valLoss
                         min_valloss_epoch = epoch + 1
                     
-                    # Save if update the best
-                    # save model at the largest valpsnr
-                    if running_valpsnr > max_valpsnr:
-                        max_valpsnr = running_valpsnr
+                    if valPSNR > max_valpsnr:
+                        max_valpsnr = valPSNR
                         max_valpsnr_epoch = epoch + 1
                     
                         torch.save(
@@ -364,9 +357,8 @@ def main():
                             os.path.join(opt.outdir, 'AtJ_DH_MaxCKPT.pth')
                         ) 
 
-                    # Save if update the best
-                    if running_valssim > max_valssim:
-                        max_valssim = running_valssim
+                    if valSSIM > max_valssim:
+                        max_valssim = valSSIM
                         max_valssim_epoch = epoch + 1
 
                     saveTrainingCurve(
@@ -378,17 +370,19 @@ def main():
                         fname='loss.png'
                     )
                     
-                    running_valloss = 0.0
-                    running_valpsnr = 0.0
-                    running_valssim = 0.0
+                    valLoss = 0.0
+                    valPSNR = 0.0
+                    valSSIM = 0.0
 
                 model.train()
 
-        # Print records over all epoches
-        print('min_valloss_epoch %d: valloss %.3f' % (min_valloss_epoch, min_valloss))
-        print('max_valpsnr_epoch %d: valpsnr %.3f' % (max_valpsnr_epoch, max_valpsnr))
-        print('max_valssim_epoch %d: valssim %.3f' % (max_valssim_epoch, max_valssim))
-        
+        # Show Message
+        print('>> Epoch {:d} VALIDATION: Loss: {:.3f}, PSNR: {:.3f}, SSIM: {:.3f}'.format(
+            epoch + 1, valLoss, valPSNR, valSSIM))
+
+        print('>> Best Epoch: {:d}, PSNR: {:.3f}'.format(
+            max_valpsnr_epoch, max_valpsnr))
+
         # Save checkpoint
         torch.save(
             {
