@@ -71,3 +71,43 @@ class DatasetFromFolder(data.Dataset):
 
     def __len__(self):
         return len(self.data_filenames)
+
+class ValidationDatasetFromFolder(data.Dataset):
+    def __init__(self, image_dir, transform=None):
+        """
+        Parameters
+        ----------
+        image_dir : { str, list-like }
+            Dataset directory
+
+        transform : torchvision.transforms
+            Transform function of torchvision.
+        """
+        super(ValidationDatasetFromFolder, self).__init__()
+
+        self.data_filenames  = []
+
+        # Modify Parameters
+        if isinstance(image_dir, str):
+            image_dir = (image_dir, )
+
+        if not isinstance(image_dir, Container):
+            raise ValueError("Image Directory should be type 'str' or type 'Container'")
+
+        # Get File names
+        for directory in image_dir:
+            self.data_filenames.extend( sorted([ os.path.join(directory, x) for x in os.listdir(directory) if is_image_file(x) ]) )
+
+        self.transform = transform
+
+    def __getitem__(self, index):
+        fname = os.path.basename(self.data_filenames[index])
+        data  = Image.open(self.data_filenames[index])
+
+        if self.transform:
+            data  = self.transform(data)
+
+        return data, fname
+
+    def __len__(self):
+        return len(self.data_filenames)
