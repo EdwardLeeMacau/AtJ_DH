@@ -39,7 +39,7 @@ olefile==0.46
 openpyxl==3.0.3
 opt-einsum==0+untagged.53.g6ab433b.dirty
 pandas==1.0.1
-Pillow==6.1.0
+Pillow==6.2.0
 protobuf==3.11.4
 pyasn1==0.4.8
 pyasn1-modules==0.2.7
