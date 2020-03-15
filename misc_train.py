@@ -16,20 +16,6 @@ from torch.utils.data import DataLoader
 import transforms.pix1pix as transforms
 from datasets.pix2pix_notcombined import pix2pix_notcombined as commonDataset
 
-# valDataloader = getLoader(
-#     datasetName=opt.dataset,
-#     dataroot=opt.valDataroot,
-#     originalSize=opt.imageSize, # opt.originalSize,
-#     imageSize=opt.imageSize,
-#     batchSize=opt.valBatchSize,
-#     workers=opt.workers,
-#     mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
-#     split='val',
-#     shuffle=False,
-#     seed=opt.manualSeed
-# )
-
-
 class AverageMeter(object):
     """ Computes and stores the average and current value """
     def __init__(self):
@@ -73,14 +59,8 @@ class ImagePool:
                 return image
 
 def create_exp_dir(exp):
-    try:
-        os.makedirs(exp)
-        print('Creating exp dir: %s' % exp)
-    except OSError:
-        pass
-    
-    return True
-
+    os.makedirs(exp, exist_ok=True)
+    print('Creating exp dir: %s' % exp)
 
 def weights_init(m):
     classname = m.__class__.__name__
@@ -105,18 +85,21 @@ def getLoader(dataroot, transform=None, batchSize=4, workers=4, shuffle=True, se
     workers : int
     
     transform : torchvision.transform
+
+    Return
+    ------
+    dataloader : torch.utils.data.DataLoader
+        Desired dataloader
     """
     assert (isinstance(workers, int))
     assert (isinstance(batchSize, int))
 
-    dataset = commonDataset(
-        root=dataroot,
-        transform=transform,
-        seed=seed
-    )
-
     dataloader = DataLoader(
-        dataset, 
+        dataset=commonDataset(
+            root=dataroot,
+            transform=transform,
+            seed=seed
+        ),
         batch_size=batchSize, 
         shuffle=shuffle, 
         num_workers=workers

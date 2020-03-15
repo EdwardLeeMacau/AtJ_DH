@@ -1,7 +1,7 @@
 """
   Filename       [ metric.py ]
   PackageName    [ AtJ_DH ]
-  Synopsis       [ ]
+  Synopsis       [ Get inference performance ]
 """
 
 import argparse
@@ -10,7 +10,8 @@ from statistics import mean, stdev
 
 import numpy as np
 from PIL import Image
-from skimage.measure import compare_psnr, compare_ssim
+from skimage.metrics import peak_signal_noise_ratio, structural_similarity
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -31,18 +32,15 @@ def main():
         DHimg = Image.open(DH_img_name)
         DHimg = np.array(DHimg)
 
-        psnr = compare_psnr(GTimg, DHimg)
-        ssim = compare_ssim(GTimg, DHimg, multichannel=True)
+        psnr = peak_signal_noise_ratio(GTimg, DHimg)
+        ssim = structural_similarity(GTimg, DHimg, multichannel=True)
         psnr_list.append(psnr)
         ssim_list.append(ssim)
 
-        print('psnr=%f' % (psnr), end='  ')
-        print('ssim=%f' % (ssim))
+        print('Img {:s} PSNR={:.3f} SSIM={:.5f}'.format(DH_img_name, psnr, ssim))
 
-    print('meanpsnr=%f' % (mean(psnr_list)) )
-    print('meanssim=%f' % (mean(ssim_list)) )
-    print('stdevpsnr=%f' % (stdev(psnr_list)) )
-    print('stdevssim=%f' % (stdev(ssim_list)) )
+    print('>> PSNR MEAN={:.3f} STDEV={:.5f}'.format(mean(psnr_list), stdev(psnr_list)))
+    print('>> SSIM MEAN={:.3f} STEDV={:.5f}'.format(mean(ssim_list), stdev(ssim_list)))
 
 if __name__ == '__main__':
     main()

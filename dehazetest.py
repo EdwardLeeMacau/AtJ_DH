@@ -15,12 +15,12 @@ import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
 import torch.optim as optim
-import torchvision
 from PIL import Image
 
 # TODO: Remember change as AtJ_At when train my own model
 # import model.AtJ_At as net
 import At_model as net
+import torchvision
 from cmdparser import parser
 from misc import *
 from utils.utils import norm_ip, norm_range

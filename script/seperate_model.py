@@ -1,3 +1,8 @@
+"""
+  Filename      [ seperate_model.py ]
+  PackageName   [ AtJ_DH.script ]
+  Synopsis      [ Seperate the model parameter out from CKPT ]
+"""
 import torch
 import os
 import argparse

@@ -1,4 +1,4 @@
-""" Crop the images before dehazing """
+# Crop the images before dehazing
 
 python3 ./script/resize_crop_shift.py \
     --inputDir ../dataset/NTIRE2019_RAW/test/Hazy \

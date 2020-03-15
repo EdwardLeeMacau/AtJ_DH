@@ -1,5 +1,5 @@
 """
-  Filename       [ train-stage1.py ]
+  Filename       [ train-stage4.py ]
   PackageName    [ AtJ_DH ]
   Synopsis       [ ]
 """
@@ -136,24 +136,21 @@ def val(data, target, model: nn.Module, criterion, perceptual=None, gamma=0, kap
     return dehaze, loss.item()
 
 def getDataLoaders(opt, train_transform, val_transform):
-    """
-    Parameters
-    ----------
-    opt : Namespace
-
-    train_transform, val_transform : torchvision.transform
-
-    Return
-    ------
-    ntire_train_loader, ntire_val_loader : DataLoader
-        TrainLoader and ValidationLoader
-    """
     ntire_train_loader = DataLoader(
         dataset=DatasetFromFolder(opt.dataroot, transform=train_transform), 
         num_workers=opt.workers, 
         batch_size=opt.batchSize, 
         pin_memory=True, 
         shuffle=True
+    )
+
+    nyu_train_loader = getLoader(
+        dataroot=opt.nyuDataroot,
+        transform=train_transform,
+        batchSize=opt.batchSize,
+        workers=opt.workers,
+        shuffle=True,
+        seed=opt.manualSeed
     )
 
     ntire_val_loader = DataLoader(
@@ -164,7 +161,7 @@ def getDataLoaders(opt, train_transform, val_transform):
         shuffle=True
     )
 
-    return ntire_train_loader, ntire_val_loader
+    return ntire_train_loader, nyu_train_loader, ntire_val_loader
 
 def main():
     opt = parser.parse_args()
@@ -190,7 +187,7 @@ def main():
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    dataloader, valDataloader = getDataLoaders(opt, train_transform, val_transform)
+    dataloader, nyuloader, valDataloader = getDataLoaders(opt, train_transform, val_transform)
 
     criterionMSE = nn.MSELoss()
     criterionMSE.cuda()
@@ -216,14 +213,10 @@ def main():
     max_valpsnr, max_valpsnr_epoch = 0.0, 0
     max_valssim, max_valssim_epoch = 0.0, 0
 
-    # netG = atj.AtJ()
     model = Dense()
 
     if opt.netG :
-        try:
-            model.load_state_dict(torch.load(opt.netG)['model'])
-        except:
-            raise ValueError('Fail to load netG, check {}'.format(opt.netG))
+        model.load_state_dict(torch.load(opt.netG)['model'])
 
     startepoch = 0
     model.cuda()
@@ -238,11 +231,11 @@ def main():
     # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
-        lr = 0.0001, 
+        lr = opt.lr, 
         weight_decay=0.00005
     )
 
-    scheduler = StepLR(optimizer, step_size=35, gamma=0.7)
+    scheduler = StepLR(optimizer, step_size=20, gamma=0.5)
 
     # Main Loop of training
     t0 = time.time()
@@ -251,14 +244,16 @@ def main():
         for epoch in range(startepoch, epochs):
             model.train() 
 
-            for i, (data, target) in enumerate(dataloader, 1): 
+            for i, (packet1, packet2) in enumerate(zip(dataloader, nyuloader), 1): 
+                # ----------------------------------------------------- #
+                # Mapping HAZE - GT, with Perceptual Loss               #
+                # ----------------------------------------------------- #
+                data, target = packet1
                 data, target = data.float().cuda(), target.float().cuda() 
 
                 optimizer.zero_grad()
 
-                # Mapping HAZE - GT, with Perceptual Loss
                 outputs = model(data)[0]
-                
                 L2 = criterionMSE(outputs, target)
 
                 if kappa != 0:
@@ -269,13 +264,40 @@ def main():
 
                 else:
                     loss = L2
-                
-                # Update parameters
+            
                 loss.backward()
                 optimizer.step()
+
+                # ----------------------------------------------------- #
+                # Mapping HAZE - GT and t - t, with Perceptual Loss     #
+                # ----------------------------------------------------- #
+                data, A, t, target = packet2
+                data, A, t, target = data.float().cuda(), A.float().cuda(), t.float.cuda(), target.float().cuda() 
+                
+                optimizer.zero_grad()
+                
+                outputs, A_hat, t_hat = model(data)
+                L2 = criterionMSE(outputs, target)
+                L2 += criterionMSE(t_hat, t)
+                L2 += criterionMSE(A_hat, A)
+
+                if kappa != 0:
+                    outputsvgg = net_vgg(outputs)
+                    targetvgg = net_vgg(target)
+                    Lp = sum([criterionMSE(outputVGG, targetVGG) for (outputVGG, targetVGG) in zip(outputsvgg, targetvgg)])
+                    loss = L2 + kappa * Lp
+
+                else:
+                    loss = L2
+                
+                loss.backward()
+                optimizer.step()
+
                 running_loss += loss.item()
                 
-                # Print Loop
+                # ----------------------------------------------------- #
+                # Print Loop                                            #
+                # ----------------------------------------------------- #
                 if (i % print_every == 0):
                     running_loss = running_loss / print_every
 
@@ -285,7 +307,9 @@ def main():
 
                     writer.add_scalar('./scalar/trainLoss', running_loss, epoch * len(dataloader) + i)
 
-                # Validation Loop
+                # ----------------------------------------------------- #
+                # Validation Loop                                       #
+                # ----------------------------------------------------- #
                 if (i % val_every == 0):
                     model.eval() 
                     

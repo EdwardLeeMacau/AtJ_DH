@@ -1,7 +1,7 @@
 """
   Filename       [ MY_MAINTHREAD_test.py ]
   PackageName    [ AtJ_DH ]
-  Synopsis       [ ]
+  Synopsis       [ MY_MAINTHREAD_test with Image Resizing ]
 """
 
 import argparse
@@ -10,15 +10,15 @@ import time
 
 import numpy as np
 import torch
+from PIL import Image
 
 import model.AtJ_At as atj
 from datasets.data import ValidationDatasetFromFolder
 from misc_train import *
 from model.At_model import Dense
-from torchvision.transforms import Compose, Normalize, ToTensor, Resize
+from torchvision.transforms import Compose, Normalize, Resize, ToTensor
 from utils.utils import norm_ip, norm_range
 
-from PIL import Image
 
 def main():
     parser = argparse.ArgumentParser()
@@ -39,7 +39,7 @@ def main():
         print("{:20} {:>50}".format(key, str(value)))
 
     img_transform = Compose([
-        Resize((512, 1024)),
+        Resize((512, 640)),
         ToTensor(),
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
@@ -65,8 +65,8 @@ def main():
             data  = data.float().cuda()
             fname = os.path.join(opt.dehaze, os.path.basename(fname[0]))
 
-            output = model(data)[0]
-            output = output.cpu()
+            output, A, t = model(data)
+            output, A, t = output.cpu(), A.cpu(), t.cpu()
 
             output.mul_(torch.Tensor([0.229, 0.224, 0.225]).reshape(3, 1, 1)).add_(torch.Tensor([0.485, 0.456, 0.406]).reshape(3, 1, 1))
             
