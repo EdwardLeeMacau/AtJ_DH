@@ -1,7 +1,7 @@
 """
-  Filename       [ train-stage1.py ]
+  Filename       [ train-stage3.py ]
   PackageName    [ AtJ_DH ]
-  Synopsis       [ ]
+  Synopsis       [ Default training process with tensorboardX ]
 """
 
 import argparse
@@ -14,8 +14,6 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
-# cudnn.benchmark = True
-# cudnn.fastest = True
 import torch.optim as optim
 from matplotlib import pyplot as plt
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
@@ -32,9 +30,6 @@ from model.At_model import Dense
 from model.perceptual import vgg16ca, perceptual
 from torchvision.transforms import Compose, Normalize, ToTensor, RandomHorizontalFlip, RandomVerticalFlip
 from utils.utils import norm_ip, norm_range
-
-os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def DehazeLoss(dehaze, target, criterion, perceptual=None, kappa=0):
     """
@@ -168,7 +163,6 @@ def getDataLoaders(opt, train_transform, val_transform):
 
 def main():
     opt = parser.parse_args()
-    create_exp_dir(opt.exp)
 
     opt.manualSeed = random.randint(1, 10000)
     random.seed(opt.manualSeed)
@@ -199,16 +193,11 @@ def main():
     gamma = opt.lambdaG
     kappa = opt.lambdaK
 
-    net_vgg = None
-    if kappa != 0:
-        net_vgg = vgg16ca()
-        net_vgg.cuda()
-        net_vgg.eval()
-
     epochs = opt.niter
     print_every = opt.print_every
     val_every = opt.val_every
 
+    startepoch = 0
     running_loss = 0.0
     valLoss, valPSNR, valSSIM = 0.0, 0.0, 0.0
 
@@ -216,21 +205,36 @@ def main():
     max_valpsnr, max_valpsnr_epoch = 0.0, 0
     max_valssim, max_valssim_epoch = 0.0, 0
 
-    # netG = atj.AtJ()
+    # Deploy model and perceptual model
     model = Dense()
+    net_vgg = None
 
     if opt.netG :
-        try:
-            model.load_state_dict(torch.load(opt.netG)['model'])
-        except:
-            raise ValueError('Fail to load netG, check {}'.format(opt.netG))
+        model.load_state_dict(torch.load(opt.netG)['model'])
 
-    startepoch = 0
-    model.cuda()
+    if kappa != 0:
+        net_vgg = vgg16ca()
+        net_vgg.eval()
+ 
+    # Set GPU (Data parallel)
+    if len(opt.gpus) > 1:
+        raise NotImplementedError
 
-    # freezing encoder
+        model = nn.DataParallel(model, device_ids=opt.gpus)
+        net_vgg = nn.DataParallel(net_vgg, device_ids=opt.gpus)
+
+    else:
+        os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(opt.gpus[0])
+
+        model.cuda()
+        if kappa != 0: 
+            net_vgg.cuda()
+
+    # Freezing Encoder
     for i, child in enumerate(model.children()):
-        if i == 12: break
+        if i == 12: 
+            break
 
         for param in child.parameters(): 
             param.requires_grad = False 
@@ -238,11 +242,11 @@ def main():
     # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
-        lr = 0.0001, 
+        lr = opt.learningRate, 
         weight_decay=0.00005
     )
 
-    scheduler = StepLR(optimizer, step_size=35, gamma=0.7)
+    scheduler = StepLR(optimizer, step_size=opt.step, gamma=opt.gamma)
 
     # Main Loop of training
     t0 = time.time()
@@ -256,8 +260,8 @@ def main():
 
                 optimizer.zero_grad()
 
-                # Mapping HAZE - GT, with Perceptual Loss
-                outputs = model(data)[0]
+                # Mapping DEHAZE - GT, with Perceptual Loss
+                outputs, A, t = model(data)
                 
                 L2 = criterionMSE(outputs, target)
 
@@ -269,6 +273,20 @@ def main():
 
                 else:
                     loss = L2
+
+                # Mapping REHAZE - DATA(I), with Perceptual Loss
+                # rehaze = target * t + A * (1 - t)
+                
+                # L2 = criterionMSE(rehaze, data)
+
+                # if kappa != 0:
+                #     rehazevgg = net_vgg(rehaze)
+                #     datavgg = net_vgg(data)
+                #     Lp = sum([criterionMSE(rehazeVGG, dataVGG) for (rehazeVGG, dataVGG) in zip(rehazesvgg, datavgg)])
+                #     loss = L2 + kappa * Lp
+
+                # else:
+                #     loss = L2
                 
                 # Update parameters
                 loss.backward()

@@ -14,8 +14,6 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
-# cudnn.benchmark = True
-# cudnn.fastest = True
 import torch.optim as optim
 from matplotlib import pyplot as plt
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
@@ -136,6 +134,19 @@ def val(data, target, model: nn.Module, criterion, perceptual=None, gamma=0, kap
     return dehaze, loss.item()
 
 def getDataLoaders(opt, train_transform, val_transform):
+    """
+    Parameters
+    ----------
+    opt : Namespace
+
+    train_transform, val_transform : torchvision.transform
+
+    Return
+    ------
+    ntire_train_loader, ntire_val_loader : DataLoader
+        TrainLoader and ValidationLoader
+    """
+
     ntire_train_loader = DataLoader(
         dataset=DatasetFromFolder(opt.dataroot, transform=train_transform), 
         num_workers=opt.workers, 
@@ -165,7 +176,6 @@ def getDataLoaders(opt, train_transform, val_transform):
 
 def main():
     opt = parser.parse_args()
-    create_exp_dir(opt.exp)
 
     opt.manualSeed = random.randint(1, 10000)
     random.seed(opt.manualSeed)
@@ -223,7 +233,8 @@ def main():
 
     # freezing encoder
     for i, child in enumerate(model.children()):
-        if i == 12: break
+        if i == 12: 
+            break
 
         for param in child.parameters(): 
             param.requires_grad = False 
@@ -235,7 +246,7 @@ def main():
         weight_decay=0.00005
     )
 
-    scheduler = StepLR(optimizer, step_size=20, gamma=0.5)
+    scheduler = StepLR(optimizer, step_size=opt.step, gamma=opt.gamma)
 
     # Main Loop of training
     t0 = time.time()
