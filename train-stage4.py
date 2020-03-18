@@ -296,7 +296,7 @@ def main():
 
                 else:
                     loss = L2
-                
+
                 # ----------------------------------------------------- #
                 # Mapping REHAZE - HAZE(I), with Perceptual Loss        #
                 # ----------------------------------------------------- #
@@ -356,7 +356,7 @@ def main():
                         i, len(dataloader), running_loss))
 
                     writer.add_scalar('./scalar/trainLoss', running_loss, epoch * len(dataloader) + i)
-                
+
                     # Reset Value
                     running_loss = 0
 
