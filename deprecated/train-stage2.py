@@ -1,7 +1,7 @@
 """
   Filename       [ train-stage2.py ]
   PackageName    [ AtJ_DH ]
-  Synopsis       [ ]
+  Synopsis       [ Training Process with NYU dataset. ]
 """
 
 import argparse

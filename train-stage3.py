@@ -20,16 +20,18 @@ from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 from torch import optim as optim
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data.sampler import SubsetRandomSampler
-from tensorboardX import SummaryWriter
 
 import model.AtJ_At as atj
 from cmdparser import parser
 from datasets.data import DatasetFromFolder
 from misc_train import *
 from model.At_model import Dense
-from model.perceptual import vgg16ca, perceptual
-from torchvision.transforms import Compose, Normalize, ToTensor, RandomHorizontalFlip, RandomVerticalFlip
+from model.perceptual import perceptual, vgg16ca
+from tensorboardX import SummaryWriter
+from torchvision.transforms import (Compose, Normalize, RandomHorizontalFlip,
+                                    RandomVerticalFlip, ToTensor)
 from utils.utils import norm_ip, norm_range
+
 
 def DehazeLoss(dehaze, target, criterion, perceptual=None, kappa=0):
     """
@@ -164,13 +166,22 @@ def getDataLoaders(opt, train_transform, val_transform):
 def main():
     opt = parser.parse_args()
 
+    if os.path.exists(opt.outdir):
+        if len(os.listdir(opt.outdir)) != 0:
+            raise ValueError("Directory --outdir {} exists and not empty.".format(opt.outdir))
+
+    if not os.path.exists(opt.outdir):
+        os.makedirs(opt.outdir)
+
     opt.manualSeed = random.randint(1, 10000)
     random.seed(opt.manualSeed)
     torch.manual_seed(opt.manualSeed)
     torch.cuda.manual_seed_all(opt.manualSeed)
 
-    for key, value in vars(opt).items():
-        print("{:20} {:>50}".format(key, str(value)))
+    with open(os.path.join(opt.outdir, "record.txt"), 'w') as f:
+        for key, value in vars(opt).items():
+            print("{:20} {:>50}".format(key, str(value)))
+            f.write("{:20} {:>50}\n".format(key, str(value)))
 
     train_transform = Compose([
         # RandomHorizontalFlip(),
@@ -209,7 +220,7 @@ def main():
     model = Dense()
     net_vgg = None
 
-    if opt.netG :
+    if opt.netG:
         model.load_state_dict(torch.load(opt.netG)['model'])
 
     if kappa != 0:
@@ -256,11 +267,13 @@ def main():
             model.train() 
 
             for i, (data, target) in enumerate(dataloader, 1): 
+                # ----------------------------------------------------- #
+                # Mapping DEHAZE - GT, with Perceptual Loss             #
+                # ----------------------------------------------------- #
                 data, target = data.float().cuda(), target.float().cuda() 
 
                 optimizer.zero_grad()
 
-                # Mapping DEHAZE - GT, with Perceptual Loss
                 outputs, A, t = model(data)
                 
                 L2 = criterionMSE(outputs, target)
@@ -274,7 +287,9 @@ def main():
                 else:
                     loss = L2
 
-                # Mapping REHAZE - DATA(I), with Perceptual Loss
+                # ----------------------------------------------------- #
+                # Mapping REHAZE - HAZE(I), with Perceptual Loss        #
+                # ----------------------------------------------------- #
                 # rehaze = target * t + A * (1 - t)
                 
                 # L2 = criterionMSE(rehaze, data)
@@ -293,7 +308,9 @@ def main():
                 optimizer.step()
                 running_loss += loss.item()
                 
-                # Print Loop
+                # ----------------------------------------------------- #
+                # Print Loop                                            #
+                # ----------------------------------------------------- #
                 if (i % print_every == 0):
                     running_loss = running_loss / print_every
 
@@ -303,9 +320,17 @@ def main():
 
                     writer.add_scalar('./scalar/trainLoss', running_loss, epoch * len(dataloader) + i)
 
-                # Validation Loop
+                    # Reset Value
+                    running_loss = 0
+
+                # ----------------------------------------------------- #
+                # Validation Loop                                       #
+                # ----------------------------------------------------- #
                 if (i % val_every == 0):
                     model.eval() 
+
+                    # Reset Value                
+                    valLoss, valPSNR, valSSIM = 0.0, 0.0, 0.0
                     
                     with torch.no_grad():
                         for j, (data, target) in enumerate(valDataloader, 1):
@@ -381,9 +406,6 @@ def main():
 
                     print('>> Best Epoch: {:d}, PSNR: {:.3f}'.format(
                         max_valpsnr_epoch, max_valpsnr))
-
-                    # Reset Value                
-                    valLoss, valPSNR, valSSIM = 0.0, 0.0, 0.0
 
                     model.train()
             

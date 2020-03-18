@@ -9,11 +9,14 @@ parser.add_argument('--valDataroot',
     default='../dataset/DS5_2020/val512', help='Path to validation dataset')
 parser.add_argument('--outdir',
     default='./pretrained-model', help='path to saved model')
-parser.add_argument('--exp', type=str,
-    default='sample', help='Folder to output images and model checkpoints') 
+# parser.add_argument('--exp', type=str,
+#     default='sample', help='Folder to output images and model checkpoints') 
 
 parser.add_argument('--gpus', nargs='*', type=int,
     default=[0], help='To use the DataParallel method')
+
+parser.add_argument('--verbose', action='store_true',
+    default=False, help='Save the validation dehaze image')
 
 parser.add_argument('--learningRate', type=float,
     default=1e-4, help='Initial Learning Rate')

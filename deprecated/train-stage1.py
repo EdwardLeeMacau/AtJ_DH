@@ -1,7 +1,7 @@
 """
   Filename       [ train-stage1.py ]
   PackageName    [ AtJ_DH ]
-  Synopsis       [ ]
+  Synopsis       [ Default training process. ]
 """
 
 import argparse
@@ -14,13 +14,10 @@ import torch
 import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
-# cudnn.benchmark = True
-# cudnn.fastest = True
 import torch.optim as optim
 from matplotlib import pyplot as plt
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 from torch import optim as optim
-from torch.autograd import Variable
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data.sampler import SubsetRandomSampler
 
@@ -30,7 +27,8 @@ from datasets.data import DatasetFromFolder
 from misc_train import *
 from model.At_model import Dense
 from model.perceptual import vgg16ca
-from torchvision.transforms import Compose, Normalize, ToTensor, RandomHorizontalFlip, RandomVerticalFlip
+from torchvision.transforms import (Compose, Normalize, RandomHorizontalFlip,
+                                    RandomVerticalFlip, ToTensor)
 from utils.utils import norm_ip, norm_range
 
 os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
@@ -47,6 +45,7 @@ def DehazeLoss(dehaze, target, criterion, perceptual=None, kappa=0):
         The ratio of criterion and perceptual loss.
     """
     loss = criterion(dehaze, target)
+
     if perceptual is not None: 
         loss += kappa * perceptual(dehaze, target)
     
@@ -63,6 +62,7 @@ def HazeLoss(haze, target, criterion, perceptual=None, kappa=0):
         The ratio of criterion and perceptual loss.
     """
     loss = criterion(haze, target)
+
     if perceptual is not None: 
         loss += kappa * perceptual(haze, target)
 
@@ -160,7 +160,6 @@ def getDataLoaders(opt, train_transform, val_transform):
 
 def main():
     opt = parser.parse_args()
-    create_exp_dir(opt.exp)
 
     opt.manualSeed = random.randint(1, 10000)
     random.seed(opt.manualSeed)
@@ -191,17 +190,11 @@ def main():
     gamma = opt.lambdaG
     kappa = opt.lambdaK
 
-    # Initialize VGG-16 with batch norm as Perceptual Loss
-    net_vgg = None
-    if kappa != 0:
-        net_vgg = vgg16ca()
-        net_vgg.cuda()
-        net_vgg.eval()
-
     epochs = opt.niter
     print_every = opt.print_every
     val_every = opt.val_every
 
+    startepoch = 0    
     running_loss = 0.0
     valLoss, valPSNR, valSSIM = 0.0, 0.0, 0.0
 
@@ -219,18 +212,23 @@ def main():
     # netG = atj.AtJ()
     model = Dense()
 
-    if opt.netG :
-        try:
-            model.load_state_dict(torch.load(opt.netG)['model'])
-        except:
-            raise ValueError('Fail to load netG, check {}'.format(opt.netG))
+    if opt.netG:
+        model.load_state_dict(torch.load(opt.netG)['model'])
 
-    startepoch = 0
+    # Initialize VGG-16 with batch norm as Perceptual Loss
+    net_vgg = None
+    if kappa != 0:
+        net_vgg = vgg16ca()
+        net_vgg.cuda()
+        net_vgg.eval()
+
+
     model.cuda()
 
-    # freezing encoder
+    # Freezing Encoder
     for i, child in enumerate(model.children()):
-        if i == 12: break
+        if i == 12: 
+            break
 
         for param in child.parameters(): 
             param.requires_grad = False 
@@ -238,26 +236,24 @@ def main():
     # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
-        lr = 0.0001, 
+        lr = opt.learningRate, 
         weight_decay=0.00005
     )
 
-    scheduler = StepLR(optimizer, step_size=35, gamma=0.7)
-
+    scheduler = StepLR(optimizer, step_size=opt.step, gamma=opt.gamma)
     
     # Main Loop of training
     t0 = time.time()
+
     for epoch in range(startepoch, epochs):
         model.train() 
 
         for i, (data, target) in enumerate(dataloader, 1): 
-            data, target = data.float().cuda(), target.float().cuda() # hazy, gt
-
-            # loss = train(data, target, netG, optimizer, criterionMSE, net_vgg, gamma=0, kappa=kappa)
+            data, target = data.float().cuda(), target.float().cuda()
 
             optimizer.zero_grad()
 
-            # Mapping Dehaze - Dehaze, with Perceptual Loss
+            # Mapping DEHAZE - GT, with Perceptual Loss
             outputs = model(data)[0]
             
             L2 = criterionMSE(outputs, target)
@@ -270,12 +266,27 @@ def main():
 
             else:
                 loss = L2
+
+            # Mapping REHAZE - DATA(I), with Perceptual Loss
+            # rehaze = target * t + A * (1 - t)
+            
+            # L2 = criterionMSE(rehaze, data)
+
+            # if kappa != 0:
+            #     rehazevgg = net_vgg(rehaze)
+            #     datavgg = net_vgg(data)
+            #     Lp = sum([criterionMSE(rehazeVGG, dataVGG) for (rehazeVGG, dataVGG) in zip(rehazesvgg, datavgg)])
+            #     loss = L2 + kappa * Lp
+
+            # else:
+            #     loss = L2
             
             # Update parameters
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
             
+            # Print Loop
             if (i % print_every == 0):
                 running_loss = running_loss / print_every
 
@@ -289,11 +300,12 @@ def main():
             if (i % val_every == 0):
                 model.eval() 
                 
+                # Reset Value                
+                valLoss, valPSNR, valSSIM = 0.0, 0.0, 0.0
+
                 with torch.no_grad():
                     for j, (data, target) in enumerate(valDataloader, 1):
                         data, target = data.float().cuda(), target.float().cuda()
-
-                        # output, loss = val(data, target, model, criterionMSE, net_vgg, gamma=0, kappa=0)
 
                         output = model(data)[0]
                         L2 = criterionMSE(output, target)
@@ -306,7 +318,6 @@ def main():
 
                         else:
                             loss = L2.item()
-
                        
                         # tensor to ndarr to get PSNR, SSIM
                         tensors = [output.data.cpu(), target.data.cpu()]
@@ -352,7 +363,6 @@ def main():
                                 'epoch': epoch,
                                 'optimizer': optimizer.state_dict(),
                                 'scheduler': scheduler.state_dict(),
-                                'loss': loss
                             }, 
                             os.path.join(opt.outdir, 'AtJ_DH_MaxCKPT.pth')
                         ) 
@@ -370,10 +380,6 @@ def main():
                         fname='loss.png'
                     )
                     
-                    valLoss = 0.0
-                    valPSNR = 0.0
-                    valSSIM = 0.0
-
                 model.train()
 
         # Show Message
@@ -390,7 +396,6 @@ def main():
                 'epoch': epoch,
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),
-                'loss': loss
             }, 
             os.path.join(opt.outdir, 'AtJ_DH_CKPT.pth')
         )
@@ -399,8 +404,6 @@ def main():
         scheduler.step()
 
     print('FINISHED TRAINING')
-    t1 = time.time()
-    print('running time:' + str(t1 - t0))
     torch.save(model.state_dict(), os.path.join(opt.outdir, 'AtJ_DH.pth'))
 
 if __name__ == '__main__':

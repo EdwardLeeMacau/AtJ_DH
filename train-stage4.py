@@ -1,7 +1,7 @@
 """
   Filename       [ train-stage4.py ]
   PackageName    [ AtJ_DH ]
-  Synopsis       [ ]
+  Synopsis       [ Training process with NYU Dataset and tensorboardX ]
 """
 
 import argparse
@@ -20,19 +20,18 @@ from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 from torch import optim as optim
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data.sampler import SubsetRandomSampler
-from tensorboardX import SummaryWriter
 
 import model.AtJ_At as atj
 from cmdparser import parser
 from datasets.data import DatasetFromFolder
 from misc_train import *
 from model.At_model import Dense
-from model.perceptual import vgg16ca, perceptual
-from torchvision.transforms import Compose, Normalize, ToTensor, RandomHorizontalFlip, RandomVerticalFlip
+from model.perceptual import perceptual, vgg16ca
+from tensorboardX import SummaryWriter
+from torchvision.transforms import (Compose, Normalize, RandomHorizontalFlip,
+                                    RandomVerticalFlip, ToTensor)
 from utils.utils import norm_ip, norm_range
 
-os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def DehazeLoss(dehaze, target, criterion, perceptual=None, kappa=0):
     """
@@ -146,7 +145,6 @@ def getDataLoaders(opt, train_transform, val_transform):
     ntire_train_loader, ntire_val_loader : DataLoader
         TrainLoader and ValidationLoader
     """
-
     ntire_train_loader = DataLoader(
         dataset=DatasetFromFolder(opt.dataroot, transform=train_transform), 
         num_workers=opt.workers, 
@@ -177,13 +175,22 @@ def getDataLoaders(opt, train_transform, val_transform):
 def main():
     opt = parser.parse_args()
 
+    if os.path.exists(opt.outdir):
+        if len(os.listdir(opt.outdir)) != 0:
+            raise ValueError("Directory --outdir {} exists and not empty.".format(opt.outdir))
+
+    if not os.path.exists(opt.outdir):
+        os.makedirs(opt.outdir)
+
     opt.manualSeed = random.randint(1, 10000)
     random.seed(opt.manualSeed)
     torch.manual_seed(opt.manualSeed)
     torch.cuda.manual_seed_all(opt.manualSeed)
 
-    for key, value in vars(opt).items():
-        print("{:20} {:>50}".format(key, str(value)))
+    with open(os.path.join(opt.outdir, "record.txt"), 'w') as f:
+        for key, value in vars(opt).items():
+            print("{:20} {:>50}".format(key, str(value)))
+            f.write("{:20} {:>50}\n".format(key, str(value)))
 
     train_transform = Compose([
         # RandomHorizontalFlip(),
@@ -206,16 +213,11 @@ def main():
     gamma = opt.lambdaG
     kappa = opt.lambdaK
 
-    net_vgg = None
-    if kappa != 0:
-        net_vgg = vgg16ca()
-        net_vgg.cuda()
-        net_vgg.eval()
-
     epochs = opt.niter
     print_every = opt.print_every
     val_every = opt.val_every
 
+    startepoch = 0
     running_loss = 0.0
     valLoss, valPSNR, valSSIM = 0.0, 0.0, 0.0
 
@@ -223,15 +225,33 @@ def main():
     max_valpsnr, max_valpsnr_epoch = 0.0, 0
     max_valssim, max_valssim_epoch = 0.0, 0
 
+    # Deploy model and perceptual model
     model = Dense()
+    net_vgg = None
 
-    if opt.netG :
+    if opt.netG:
         model.load_state_dict(torch.load(opt.netG)['model'])
 
-    startepoch = 0
-    model.cuda()
+    if kappa != 0:
+        net_vgg = vgg16ca()
+        net_vgg.eval()
 
-    # freezing encoder
+    # Set GPU (Data parallel)
+    if len(opt.gpus) > 1:
+        raise NotImplementedError
+
+        model = nn.DataParallel(model, device_ids=opt.gpus)
+        net_vgg = nn.DataParallel(net_vgg, device_ids=opt.gpus)
+
+    else:
+        os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(opt.gpus[0])
+
+        model.cuda()
+        if kappa != 0: 
+            net_vgg.cuda()
+
+    # Freezing Encoder
     for i, child in enumerate(model.children()):
         if i == 12: 
             break
@@ -242,7 +262,7 @@ def main():
     # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
-        lr = opt.lr, 
+        lr = opt.learningRate, 
         weight_decay=0.00005
     )
 
@@ -257,7 +277,7 @@ def main():
 
             for i, (packet1, packet2) in enumerate(zip(dataloader, nyuloader), 1): 
                 # ----------------------------------------------------- #
-                # Mapping HAZE - GT, with Perceptual Loss               #
+                # Mapping DEHAZE - GT, with Perceptual Loss             #
                 # ----------------------------------------------------- #
                 data, target = packet1
                 data, target = data.float().cuda(), target.float().cuda() 
@@ -265,6 +285,7 @@ def main():
                 optimizer.zero_grad()
 
                 outputs = model(data)[0]
+
                 L2 = criterionMSE(outputs, target)
 
                 if kappa != 0:
@@ -275,9 +296,27 @@ def main():
 
                 else:
                     loss = L2
-            
+                
+                # ----------------------------------------------------- #
+                # Mapping REHAZE - HAZE(I), with Perceptual Loss        #
+                # ----------------------------------------------------- #
+                # rehaze = target * t + A * (1 - t)
+                
+                # L2 = criterionMSE(rehaze, data)
+
+                # if kappa != 0:
+                #     rehazevgg = net_vgg(rehaze)
+                #     datavgg = net_vgg(data)
+                #     Lp = sum([criterionMSE(rehazeVGG, dataVGG) for (rehazeVGG, dataVGG) in zip(rehazesvgg, datavgg)])
+                #     loss = L2 + kappa * Lp
+
+                # else:
+                #     loss = L2
+                
+                # Update parameters
                 loss.backward()
                 optimizer.step()
+                running_loss += loss.item()
 
                 # ----------------------------------------------------- #
                 # Mapping HAZE - GT and t - t, with Perceptual Loss     #
@@ -301,9 +340,9 @@ def main():
                 else:
                     loss = L2
                 
+                # Update parameters
                 loss.backward()
                 optimizer.step()
-
                 running_loss += loss.item()
                 
                 # ----------------------------------------------------- #
@@ -317,13 +356,19 @@ def main():
                         i, len(dataloader), running_loss))
 
                     writer.add_scalar('./scalar/trainLoss', running_loss, epoch * len(dataloader) + i)
+                
+                    # Reset Value
+                    running_loss = 0
 
                 # ----------------------------------------------------- #
                 # Validation Loop                                       #
                 # ----------------------------------------------------- #
                 if (i % val_every == 0):
                     model.eval() 
-                    
+
+                    # Reset Value                
+                    valLoss, valPSNR, valSSIM = 0.0, 0.0, 0.0
+
                     with torch.no_grad():
                         for j, (data, target) in enumerate(valDataloader, 1):
                             data, target = data.float().cuda(), target.float().cuda()
@@ -398,9 +443,6 @@ def main():
 
                     print('>> Best Epoch: {:d}, PSNR: {:.3f}'.format(
                         max_valpsnr_epoch, max_valpsnr))
-
-                    # Reset Value                
-                    valLoss, valPSNR, valSSIM = 0.0, 0.0, 0.0
 
                     model.train()
             
