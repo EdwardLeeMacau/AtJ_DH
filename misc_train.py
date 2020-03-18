@@ -58,9 +58,55 @@ class ImagePool:
             else:
                 return image
 
-def create_exp_dir(exp):
-    os.makedirs(exp, exist_ok=True)
-    print('Creating exp dir: %s' % exp)
+def DehazeLoss(dehaze, target, criterion, perceptual=None, kappa=0):
+    """
+    Parameters
+    ----------
+    perceptual : optional
+        Perceptual loss is applied if nn.Module is provided.
+    
+    kappa : float
+        The ratio of criterion and perceptual loss.
+
+    Return
+    ------
+    loss :
+        The loss and the gradient information
+    """
+    loss = criterion(dehaze, target)
+
+    if (perceptual is not None) and (kappa != 0): 
+        dehazesVGG = perceptual(dehaze)
+        targetsVGG = perceptual(target)
+
+        loss += kappa * sum([criterion(dehazevgg, targetvgg) for (dehazevgg, targetvgg) in zip(dehazesVGG, targetsVGG)])
+    
+    return loss
+
+def HazeLoss(rehaze, target, criterion, perceptual=None, kappa=0):
+    """
+    Parameters
+    ----------
+    perceptual : optional
+        Perceptual loss is applied if nn.Module is provided.
+    
+    kappa : float
+        The ratio of criterion and perceptual loss.
+
+    Return
+    ------
+    loss :
+        The loss and the gradient information
+    """
+    loss = criterion(rehaze, target)
+
+    if perceptual is not None: 
+        rehazesVGG = perceptual(rehaze)
+        targetsVGG = perceptual(target)
+        
+        loss += kappa * sum([criterion(rehazevgg, targetvgg) for (rehazevgg, targetvgg) in zip(rehazesVGG, targetsVGG)])
+
+    return loss
 
 def weights_init(m):
     classname = m.__class__.__name__
@@ -180,21 +226,25 @@ def saveTrainingCurve(train_loss, val_loss, psnr, ssim, epoch, fname=None, linew
     return
 
 
+# def create_exp_dir(exp):
+#     os.makedirs(exp, exist_ok=True)
+#     print('Creating exp dir: %s' % exp)
 
-def adjust_learning_rate(optimizer, init_lr, epoch, factor, every):
-    """
-    :param optimizer: 
-
-    :param init_learning_rate:
-    
-    :param epoch:
-
-    :param every:
-    """
-    lrd = init_lr / every
-    old_lr = optimizer.param_groups[0]['lr']
-    # linearly decaying lr
-    lr = old_lr - lrd
-    if lr < 0: lr = 0
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+# def adjust_learning_rate(optimizer, init_lr, epoch, factor, every):
+#     """
+#     :param optimizer: 
+# 
+#     :param init_learning_rate:
+#     
+#     :param epoch:
+# 
+#     :param every:
+#     """
+#     lrd = init_lr / every
+#     old_lr = optimizer.param_groups[0]['lr']
+# 
+#     # linearly decaying lr
+#     lr = old_lr - lrd
+#     if lr < 0: lr = 0
+#     for param_group in optimizer.param_groups:
+#         param_group['lr'] = lr

@@ -1,12 +1,12 @@
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataroot', 
-    default='../dataset/DS5_2020/train512', help='Path to train dataset')
+parser.add_argument('--dataroot', nargs='*', type=str,
+    default=['../dataset/DS5_2020/train512'], help='Path to train dataset')
 parser.add_argument('--nyuDataroot',
     default='../dataset/nyu/train', help='Path to train dataset (with t(x))')
-parser.add_argument('--valDataroot',
-    default='../dataset/DS5_2020/val512', help='Path to validation dataset')
+parser.add_argument('--valDataroot', nargs='*', type=str,
+    default=['../dataset/DS5_2020/val512'], help='Path to validation dataset')
 parser.add_argument('--outdir',
     default='./pretrained-model', help='path to saved model')
 # parser.add_argument('--exp', type=str,

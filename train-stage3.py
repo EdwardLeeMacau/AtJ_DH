@@ -15,6 +15,7 @@ import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
 import torch.optim as optim
+from torch.utils.data import DataLoader
 from matplotlib import pyplot as plt
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 from torch import optim as optim
@@ -24,54 +25,13 @@ from torch.utils.data.sampler import SubsetRandomSampler
 import model.AtJ_At as atj
 from cmdparser import parser
 from datasets.data import DatasetFromFolder
-from misc_train import *
+from misc_train import DehazeLoss, HazeLoss
 from model.At_model import Dense
-from model.perceptual import perceptual, vgg16ca
+from model.perceptual import Perceptual, vgg16ca
 from tensorboardX import SummaryWriter
 from torchvision.transforms import (Compose, Normalize, RandomHorizontalFlip,
                                     RandomVerticalFlip, ToTensor)
 from utils.utils import norm_ip, norm_range
-
-
-def DehazeLoss(dehaze, target, criterion, perceptual=None, kappa=0):
-    """
-    Parameters
-    ----------
-    perceptual : optional
-        Perceptual loss is applied if nn.Module is provided.
-    
-    kappa : float
-        The ratio of criterion and perceptual loss.
-    """
-    loss = criterion(dehaze, target)
-
-    if perceptual is not None: 
-        dehaze_p1, dehaze_p2, dehaze_p3 = perceptual(dehaze)
-        target_p1, target_p2, target_p3 = perceptual(target)
-
-        loss += kappa * (criterion(dehaze_p1, target_p1) + criterion(dehaze_p2, target_p2) + criterion(dehaze_p3, target_p3))
-    
-    return loss
-
-def HazeLoss(rehaze, target, criterion, perceptual=None, kappa=0):
-    """
-    Parameters
-    ----------
-    perceptual : optional
-        Perceptual loss is applied if nn.Module is provided.
-    
-    kappa : float
-        The ratio of criterion and perceptual loss.
-    """
-    loss = criterion(rehaze, target)
-
-    if perceptual is not None: 
-        rehaze_p1, rehaze_p2, rehaze_p3 = perceptual(rehaze)
-        target_p1, target_p2, target_p3 = perceptual(target)
-        
-        loss += kappa * (criterion(rehaze_p1, target_p1) + criterion(rehaze_p2, target_p2) + criterion(rehaze_p3, target_p3))
-
-    return loss
 
 def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion, perceptual=None, gamma=0, kappa=0):
     """

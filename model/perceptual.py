@@ -13,24 +13,29 @@ class vgg16ca(nn.Module):
     def __init__(self):
         super(vgg16ca, self).__init__()
 
-        haze_class = models.vgg16(pretrained=True)
+        vgg16 = models.vgg16(pretrained=True)
         self.feature1_1 = nn.Sequential()
         self.feature2_2 = nn.Sequential()
         self.feature3_3 = nn.Sequential()
 
         for i in range(16):
             if i < 2:
-                self.feature1_1.add_module(str(i),haze_class.features[i])
-            if i < 9:
-                self.feature2_2.add_module(str(i),haze_class.features[i])
-            self.feature3_3.add_module(str(i),haze_class.features[i])
+                self.feature1_1.add_module(str(i), vgg16.features[i])
+            elif i < 9:
+                self.feature2_2.add_module(str(i), vgg16.features[i])
+            else:
+                self.feature3_3.add_module(str(i), vgg16.features[i])
         
     def forward(self, x):
-        return self.feature1_1(x), self.feature2_2(x), self.feature3_3(x)
+        x1_1 = self.feature1_1(x)
+        x2_2 = self.feature2_2(x1_1)
+        x3_3 = self.feature3_3(x2_2)
+        
+        return x1_1, x2_2, x3_3
 
-class perceptual(nn.Module):
+class Perceptual(nn.Module):
     def __init__(self, model, criterion):
-        super(perceptual, self).__init__()
+        super(Perceptual, self).__init__()
         self.model = model
         self.criterion = criterion
 
