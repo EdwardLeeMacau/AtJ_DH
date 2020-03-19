@@ -1,18 +1,18 @@
 # Using self trained model to dehazing.
 
-echo python3 script/resize_crop_shift.py \
-    && python3 script/resize_crop_shift.py \
-        --inputDir ./test_images/NTIRE2020_RAW/test/Hazy \
-        --outputDir ./test_images/NTIRE2020_RAW/test/Hazy_Patch \
-        --segment 5        
+# echo python3 script/resize_crop_shift.py \
+#     && python3 script/resize_crop_shift.py \
+#         --inputDir ./test_images/NTIRE2020_RAW/test/Hazy \
+#         --outputDir ./test_images/NTIRE2020_RAW/test/Hazy_Patch \
+#         --resize 1024 \
+#         --segment 5        
 
-echo python3 MY_MAINTHREAD_test_2.py \
-    && python3 MY_MAINTHREAD_test_2.py \
-        --netG ./pretrained-model/AtJ_DH_MaxCKPT.pth \
-        --haze ./test_images/NTIRE2020_RAW/test/Hazy_Patch \
-        --dehaze ./test_images/NTIRE2020_RAW/test/DeHazy_Patch \
-        --segment 5 \
-        --gpus 2
+# echo python3 MY_MAINTHREAD_test_2.py \
+#     && python3 MY_MAINTHREAD_test_2.py \
+#         --netG ./pretrained-model/AtJ_DH_MaxCKPT.pth \
+#         --haze ./test_images/NTIRE2020_RAW/test/Hazy_Patch \
+#         --dehaze ./test_images/NTIRE2020_RAW/test/DeHazy_Patch \
+#         --gpus 2
 
 echo python3 merge_patch_spline.py \
     && python3 merge_patch_spline.py \

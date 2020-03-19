@@ -46,7 +46,6 @@ def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = str(opt.gpus)
 
     img_transform = Compose([
-        Resize((1024, 1024)),
         ToTensor(),
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
@@ -84,7 +83,6 @@ def main():
             output = np.transpose(output, (1, 2, 0)) # CHW to HWC
 
             im = Image.fromarray(output)
-            im = im.resize((1600, 1200))
             im.save(fname)
 
             # Show Message

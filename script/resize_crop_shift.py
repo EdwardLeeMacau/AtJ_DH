@@ -23,38 +23,47 @@ def main():
     if not os.path.exists(opt.outputDir):
         os.makedirs(opt.outputDir)
 
+    # TODO
+    if opt.direction is not None:
+        raise NotImplementedError
+
+
     for fname in (os.listdir(opt.inputDir)):
         basename, surfix = fname.split('.')
         t0 = time.time()
 
         img  = Image.open(os.path.join(opt.inputDir, fname)).convert('RGB')
-
-        if opt.direction is not None:
-            raise NotImplementedError
+        print('>>> Filename: {}'.format(os.path.join(opt.inputDir, fname)))
+        print('>>>     Raw Shape(W x H): ({:d}, {:d})'.format(*img.size))
 
         if opt.direction is None:
-            H, W = img.size
+            W, H = img.size
             unit = min(H, W)
-            step = int((max(H, W) - unit) / opt.segment)
+            step = int((max(H, W) - unit) / (opt.segment - 1))
             opt.direction = 'Horizontal' if (W > H) else "Vertical"
 
         # If loss pixels
-        if opt.step * opt.segment + unit != max(H, W):
+        if step * (opt.segment - 1) + unit != max(H, W):
             raise NotImplementedError
 
         for j in range(opt.segment):
+            # Get the crop range
             if opt.direction == "Horizontal":
-                img_t = img.crop(((step * j), 0, unit + (step * j), H))
+                location = ((step * j), 0, unit + (step * j), H)
             if opt.direction == "Vertical":
-                img_t = img.crop((0, step * j, W, unit + step * j))
+                location = ((0, step * j, W, unit + step * j))
+
+            img_t = img.crop(location)
             
             if opt.resize is not None:
                 img_t = img_t.resize((opt.resize, opt.resize))
 
-            img_t.save(os.path.join(opt.outputDir, basename + '_' + str(j)+ surfix))
-
-        t1 = time.time()
-        print('>> [{:.2f}] Filename: {}'.format(t1 - t0, os.path.join(opt.inputDir, fname)))
-        
+            img_t.save(os.path.join(opt.outputDir, basename + '_' + str(j) + '.' + surfix))
+            print('>>>     Saved: {}'.format(os.path.join(opt.outputDir, fname)))
+            print('>>>     Range: ({:d}, {:d}), ({:d}, {:d})'.format(*location))
+            print('>>>     Shape: ({:d}, {:d})'.format(*img_t.size))
+ 
+    t1 = time.time()
+       
 if __name__ == "__main__":
     main()
