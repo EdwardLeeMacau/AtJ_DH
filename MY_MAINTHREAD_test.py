@@ -25,6 +25,7 @@ def main():
     parser.add_argument('--netG', required=True)
     parser.add_argument('--haze', required=True)
     parser.add_argument('--dehaze', required=True)
+    parser.add_argument('--gpus', type=int, default=0)
     parser.add_argument('--parse')
     parser.add_argument('--rehaze')
     opt = parser.parse_args()
@@ -35,8 +36,14 @@ def main():
     if not os.path.exists(opt.netG):
         raise ValueError("netG {} doesn't exist".format(opt.netG))
 
+    if not os.path.exists(opt.dehaze):
+        os.makedirs(opt.dehaze)
+
     for key, value in vars(opt).items():
         print("{:20} {:>50}".format(key, str(value)))
+
+    os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(opt.gpus)
 
     img_transform = Compose([
         ToTensor(),

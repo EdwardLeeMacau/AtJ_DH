@@ -252,7 +252,7 @@ class Dense(nn.Module):
 
         self.decoder_A = Dense_decoder()
         self.decoder_T = Dense_decoder()
-        # self.decoder_J = Dense_decoder()
+        self.decoder_B = Dense_decoder()
         self.convT1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
         self.ResT = ResidualBlock(32)
         self.convT = nn.Conv2d(32, 1, kernel_size=3, stride=1, padding=1)
