@@ -6,16 +6,15 @@ import time
 import numpy as np
 from PIL import Image
 
-from natsort import natsorted, ns
-
 # resize to 4096*2048 >> crop patches with size 2048*2048 >> shift the patch 512 every time when done cropping
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--inputDir', required=True)
     parser.add_argument('--outputDir', required=True)
-    parser.add_argument('--w', type=int, default=4096)
-    parser.add_argument('--h', type=int, default=2048)
+    parser.add_argument('--resize', type=int)
+    parser.add_argument('--segment', type=int, default=5)
+    parser.add_argument('--direction', type=str, choices=[None, 'Horizontal', 'Vertical'])
     opt = parser.parse_args()
 
     if not os.path.isdir(opt.inputDir):
@@ -24,25 +23,38 @@ def main():
     if not os.path.exists(opt.outputDir):
         os.makedirs(opt.outputDir)
 
-    w = opt.w
-    h = opt.h
+    for fname in (os.listdir(opt.inputDir)):
+        basename, surfix = fname.split('.')
+        t0 = time.time()
 
-    for root, _, fnames in (os.walk(opt.inputDir)):
-        for i, fname in enumerate( natsorted(fnames, key=lambda y: y.lower()) ):
-            print('Filename: {}'.format(fname), end=' ')
+        img  = Image.open(os.path.join(opt.inputDir, fname)).convert('RGB')
 
-            t0 = time.time()
+        if opt.direction is not None:
+            raise NotImplementedError
 
-            img = Image.open(os.path.join(opt.inputDir, fname)).convert('RGB')
-            img = img.resize((w, h), Image.ANTIALIAS)
+        if opt.direction is None:
+            H, W = img.size
+            unit = min(H, W)
+            step = int((max(H, W) - unit) / opt.segment)
+            opt.direction = 'Horizontal' if (W > H) else "Vertical"
 
-            for j in range(0, 5):
-                img_t = img.crop((0+(512*j), 0, 2048+(512*j), h))
-                img_t.save(os.path.join(opt.outputDir, str(j + 5*i) + '.png'))
+        # If loss pixels
+        if opt.step * opt.segment + unit != max(H, W):
+            raise NotImplementedError
 
-            t1 = time.time()
+        for j in range(opt.segment):
+            if opt.direction == "Horizontal":
+                img_t = img.crop(((step * j), 0, unit + (step * j), H))
+            if opt.direction == "Vertical":
+                img_t = img.crop((0, step * j, W, unit + step * j))
+            
+            if opt.resize is not None:
+                img_t = img_t.resize((opt.resize, opt.resize))
 
-            print('Running time: {}'.format(t1 - t0))
+            img_t.save(os.path.join(opt.outputDir, basename + '_' + str(j)+ surfix))
 
+        t1 = time.time()
+        print('>> [{:.2f}] Filename: {}'.format(t1 - t0, os.path.join(opt.inputDir, fname)))
+        
 if __name__ == "__main__":
     main()
