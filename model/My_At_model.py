@@ -314,12 +314,12 @@ class Dense_J(nn.Module):
     def forward(self, x):
         x1, x2, x4 = self.encoder(x)
         J_direct = self.decoder_J(x, x1, x2, x4)
-        
+   
         return J_direct
 
 class Dense_AtJ(nn.Module):
     def __init__(self):
-        super(Dense_At, self).__init__()
+        super(Dense_AtJ, self).__init__()
 
         self.encoder   = Dense_encoder()
         self.decoder_A = Dense_decoder()

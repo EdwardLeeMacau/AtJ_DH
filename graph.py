@@ -6,15 +6,19 @@
 
 import torch
 from model.At_model import Dense
+from model.AtJ_At import AtJ
 from tensorboardX import SummaryWriter
 
 def main():
-    model = Dense()
+    dense = Dense()
+    # atj = AtJ()
+
     dummy_input = torch.rand(1, 3, 512, 512)
 
-    with SummaryWriter(comment='Dense') as writer:
-        writer.add_graph(model, dummy_input)
-    
+    with SummaryWriter(comment='ModelGraph') as writer:
+        writer.add_graph(dense, dummy_input, verbose=True, omit_useless_nodes=False)
+        # writer.add_graph(atj, dummy_input, verbose=True, omit_useless_nodes=False)
+
     return
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ from matplotlib import pyplot as plt
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 from torch import optim as optim
 from torch.optim.lr_scheduler import StepLR
-from torch.utils.data.sampler import SubsetRandomSampler
+# from torch.utils.data.sampler import SubsetRandomSampler
 
 # import model.AtJ_At as atj
 from cmdparser import parser
@@ -46,10 +46,8 @@ def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion:
     """
     optimizer.zero_grad()
 
-    output = model(data)
-
     # DeHaze - Target Pair
-    dehaze = output[0]
+    dehaze = model(data)
     loss = DehazeLoss(dehaze, target, criterion, perceptual, kappa=kappa) 
     
     loss.backward()
@@ -119,7 +117,7 @@ def main():
     if not os.path.exists(opt.outdir):
         os.makedirs(opt.outdir)
 
-    if opt.labmdaG != 0:
+    if opt.lambdaG != 0:
         raise ValueError("--lambdaG shoule be 0 when training A-J model. ")
 
     opt.manualSeed = random.randint(1, 10000)
@@ -176,7 +174,6 @@ def main():
         net_vgg = vgg16ca()
         net_vgg.eval()
 
-
     # Set GPU (Data parallel)
     if len(opt.gpus) > 1:
         raise NotImplementedError
@@ -185,20 +182,20 @@ def main():
         net_vgg = nn.DataParallel(net_vgg, device_ids=opt.gpus)
 
     else:
-        os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(opt.gpus[0])
+        # os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
+        # os.environ["CUDA_VISIBLE_DEVICES"] = str(opt.gpus[0])
 
         model.cuda()
         if kappa != 0: 
             net_vgg.cuda()
 
     # Freezing Encoder
-    for i, child in enumerate(model.children()):
-        if i == 12: 
-            break
-
-        for param in child.parameters(): 
-            param.requires_grad = False 
+    # for i, child in enumerate(model.children()):
+    #     if i == 12: 
+    #         break
+    # 
+    #     for param in child.parameters(): 
+    #         param.requires_grad = False 
 
     # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
@@ -221,7 +218,7 @@ def main():
                 # Mapping DEHAZE - GT, with Perceptual Loss             #
                 # ----------------------------------------------------- #
                 data, target = data.float().cuda(), target.float().cuda() 
-                loss = train(data, target, model, optimizer, criterionMSE, vgg16ca, kappa)
+                loss = train(data, target, model, optimizer, criterionMSE, net_vgg, kappa)
                 running_loss += loss
                 
                 # ----------------------------------------------------- #

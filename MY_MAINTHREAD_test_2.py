@@ -39,7 +39,7 @@ def main():
         print("{:20} {:>50}".format(key, str(value)))
 
     img_transform = Compose([
-        Resize((512, 640)),
+        Resize((512, 1024)),
         ToTensor(),
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
@@ -57,13 +57,14 @@ def main():
     model.eval()
     model.cuda()
 
-    # Main Loop of training
-    t0 = time.time()
-
     with torch.no_grad():
         for i, (data, fname) in enumerate(valDataloader, 1):
             data  = data.float().cuda()
             fname = os.path.join(opt.dehaze, os.path.basename(fname[0]))
+
+
+            # Main Loop of training
+            t0 = time.time()
 
             output, A, t = model(data)
             output, A, t = output.cpu(), A.cpu(), t.cpu()
