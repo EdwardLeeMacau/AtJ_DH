@@ -1,5 +1,5 @@
 """
-  Filename       [ My_At_model2.py ]
+  Filename       [ My_At_model_161.py ]
   PackageName    [ AtJ_DH.model ]
   Synopsis       [ Self modified AtJ Model ] 
 """
@@ -117,79 +117,146 @@ class TransitionBlock(nn.Module):
 
         return F.upsample_nearest(out, scale_factor=2)
 
+class Dense_encoder(nn.Module):
+    def __init__(self, channel=3, ):
+        super(Dense_encoder, self).__init__()
+
+        dense=models.densenet161(pretrained=True)
+        
+        self.conv0 = dense.features.conv0
+        self.norm0 = dense.features.norm0
+        self.relu0 = dense.features.relu0
+        self.pool0 = dense.features.pool0
+
+        self.dense_block1 = dense.features.denseblock1
+        self.trans_block1 = dense.features.transition1
+
+        self.dense_block2 = dense.features.denseblock2
+        self.trans_block2 = dense.features.transition2
+
+        self.dense_block3 = dense.features.denseblock3
+        self.trans_block3 = dense.features.transition3
+
+        self.dense_block4 = BottleneckDecoderBlock(1056, 528)   # 512 -> 1056
+        self.trans_block4 = TransitionBlock(1584, 256)          # 768 -> 1312
+        # self.residual_block41 = ResidualBlock(128)              # Addition Blocks
+        # self.residual_block42 = ResidualBlock(128)              # Addition Blocks
+        # self.residual_block43 = ResidualBlock(128)              # Addition Blocks
+        # self.residual_block44 = ResidualBlock(128)              # Addition Blocks
+        # self.residual_block45 = ResidualBlock(128)              # Addition Blocks
+        # self.residual_block46 = ResidualBlock(128)              # Addition Blocks
+
+    def forward(self, x):
+        # ---------------------------------------------------- #
+        # Encoder: Input Shape is assumed as (3, 512, 512)     #
+        # ---------------------------------------------------- #
+        # 64 x 128 x 128
+        x0 = self.pool0(self.relu0(self.norm0(self.conv0(x))))
+
+        # 128 x 64 x 64
+        x1 = self.dense_block1(x0)
+        x1 = self.trans_block1(x1)
+
+        # 256 x 32 x 32
+        x2 = self.trans_block2(self.dense_block2(x1))
+
+        # 896 x 16 x 16
+        x3 = self.trans_block3(self.dense_block3(x2))
+
+        # 256 x 32 x 32
+        x4 = self.trans_block4(self.dense_block4(x3))
+
+        # 256 x 32 x 32
+        # x4 = self.residual_block41(x4)
+        # x4 = self.residual_block42(x4)
+        
+        return x1, x2, x4
+
 class Dense_decoder(nn.Module):
-    """ Decoder: Input Shape is assumed as (8, 8) """
-    def __init__(self):
+    def __init__(self, output_channel: int):
         super(Dense_decoder, self).__init__()
         ############# Block5-up 16-16 ##############
-        self.dense_block5 = BottleneckDecoderBlock(384, 256)
-        self.trans_block5 = TransitionBlock(640, 128)
-        self.residual_block51 = ResidualBlock(128)
-        self.residual_block52 = ResidualBlock(128)
-        self.residual_block53 = ResidualBlock(128)
-        self.residual_block54 = ResidualBlock(128)
-        self.residual_block55 = ResidualBlock(128)
-        self.residual_block56 = ResidualBlock(128)
+        self.dense_block5 = BottleneckDecoderBlock(640, 320)        # 384 -> 512
+        self.trans_block5 = TransitionBlock(960, 160)               # 640 -> 768
+        self.residual_block51 = ResidualBlock(160)                  # Addition Block
+        self.residual_block52 = ResidualBlock(160)                  # Addition Block
+        # self.residual_block53 = ResidualBlock(128)                  # Addition Block
+        # self.residual_block54 = ResidualBlock(128)                  # Addition Block
+        # self.residual_block55 = ResidualBlock(128)                  # Addition Block
+        # self.residual_block56 = ResidualBlock(128)                  # Addition Block
 
         ############# Block6-up 32-32   ##############
-        self.dense_block6 = BottleneckDecoderBlock(256, 128)
-        self.trans_block6 = TransitionBlock(384, 64)
-        self.residual_block61 = ResidualBlock(64)
-        self.residual_block62 = ResidualBlock(64)
-        self.residual_block63 = ResidualBlock(64)
-        self.residual_block64 = ResidualBlock(64)
-        self.residual_block65 = ResidualBlock(64)
-        self.residual_block66 = ResidualBlock(64)
+        self.dense_block6 = BottleneckDecoderBlock(352, 128)        # 256 -> 320
+        self.trans_block6 = TransitionBlock(480, 64)                # 384 -> 448
+        self.residual_block61 = ResidualBlock(64)                   # Addition Block
+        self.residual_block62 = ResidualBlock(64)                   # Addition Block
+        # self.residual_block63 = ResidualBlock(64)                   # Addition Block
+        # self.residual_block64 = ResidualBlock(64)                   # Addition Block
+        # self.residual_block65 = ResidualBlock(64)                   # Addition Block
+        # self.residual_block66 = ResidualBlock(64)                   # Addition Block
 
         ############# Block7-up 64-64   ##############
         self.dense_block7 = BottleneckDecoderBlock(64, 64)
         self.trans_block7 = TransitionBlock(128, 32)
-        self.residual_block71 = ResidualBlock(32)
-        self.residual_block72 = ResidualBlock(32)
-        self.residual_block73 = ResidualBlock(32)
-        self.residual_block74 = ResidualBlock(32)
-        self.residual_block75 = ResidualBlock(32)
-        self.residual_block76 = ResidualBlock(32)
+        self.residual_block71 = ResidualBlock(32)                   # Addition Block
+        self.residual_block72 = ResidualBlock(32)                   # Addition Block
+        self.residual_block73 = ResidualBlock(32)                   # Addition Block
+        self.residual_block74 = ResidualBlock(32)                   # Addition Block
+        self.residual_block75 = ResidualBlock(32)                   # Addition Block
+        self.residual_block76 = ResidualBlock(32)                   # Addition Block
 
         ## 128 X  128
         ############# Block8-up c  ##############
         self.dense_block8 = BottleneckDecoderBlock(32, 32)
         self.trans_block8 = TransitionBlock(64, 16)
-        self.residual_block81 = ResidualBlock(16)
-        self.residual_block82 = ResidualBlock(16)
-        self.residual_block83 = ResidualBlock(16)
-        self.residual_block84 = ResidualBlock(16)
-        self.residual_block85 = ResidualBlock(16)
-        self.residual_block86 = ResidualBlock(16)
+        self.residual_block81 = ResidualBlock(16)                   # Addition Block
+        self.residual_block82 = ResidualBlock(16)                   # Addition Block
+        # self.residual_block83 = ResidualBlock(16)                   # Addition Block
+        # self.residual_block84 = ResidualBlock(16)                   # Addition Block
+        # self.residual_block85 = ResidualBlock(16)                   # Addition Block
+        # self.residual_block86 = ResidualBlock(16)                   # Addition Block
+        
         self.conv_refin = nn.Conv2d(19, 20, 3, 1, 1)
         self.tanh = nn.Tanh()
         self.conv1010 = nn.Conv2d(20, 1, kernel_size=1, stride=1, padding=0)  # 1mm
         self.conv1020 = nn.Conv2d(20, 1, kernel_size=1, stride=1, padding=0)  # 1mm
         self.conv1030 = nn.Conv2d(20, 1, kernel_size=1, stride=1, padding=0)  # 1mm
         self.conv1040 = nn.Conv2d(20, 1, kernel_size=1, stride=1, padding=0)  # 1mm
-        self.refine3 = nn.Conv2d(20 + 4, 3, kernel_size=3, stride=1, padding=1)
+
+        self.refine = nn.Sequential(
+            nn.Conv2d(24, 20, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(20, 20, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(20, 20, kernel_size=7, stride=1, padding=3),
+            nn.Conv2d(20, output_channel, kernel_size=7, stride=1, padding=3)
+        )
+
         self.upsample = F.upsample_nearest
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x, x1, x2, x4):
+        # ---------------------------------------------------- #
+        # Decoder:                                             # 
+        #     Input Shape is assumed as                        #
+        #       x1 : (3, 512, 512)                             #
+        # ---------------------------------------------------- #
         x42 = torch.cat([x4, x2], 1)        # Concat
-        
-        # 16 x 16
+
+        # 512 x 32 x 32
         x5 = self.trans_block5(self.dense_block5(x42))
         x5 = self.residual_block51(x5)
         x5 = self.residual_block52(x5)
         x52 = torch.cat([x5, x1], 1)        # Concat
-        
-        # 32 x 32
+
+        # 320 x 64 x 64
         x6 = self.trans_block6(self.dense_block6(x52))
         x6 = self.residual_block61(x6)
         x6 = self.residual_block62(x6)
-        
+
         # 64 x 64
         x7 = self.trans_block7(self.dense_block7(x6))
         x7 = self.residual_block71(x7)
         x7 = self.residual_block72(x7)
-        
+
         # 128 x 128
         x8 = self.trans_block8(self.dense_block8(x7))
         x8 = self.residual_block81(x8)
@@ -198,7 +265,8 @@ class Dense_decoder(nn.Module):
 
         # 256 x 256
         x9 = self.relu(self.conv_refin(x8))
-
+        
+        # Multi-Size
         shape_out = x9.data.size()
         shape_out = shape_out[2:4]
         x101 = F.avg_pool2d(x9, 32)
@@ -210,74 +278,18 @@ class Dense_decoder(nn.Module):
         x1030 = self.upsample(self.relu(self.conv1030(x103)), size=shape_out)
         x1040 = self.upsample(self.relu(self.conv1040(x104)), size=shape_out)
         dehaze = torch.cat((x1010, x1020, x1030, x1040, x9), 1)
-        dehaze = self.refine3(dehaze)
+
+        dehaze = self.refine(dehaze)
 
         return dehaze
-
-class Dense_encoder(nn.Module):
-    def __init__(self):
-        super(Dense_encoder, self).__init__()
-        ############# 256-256  ##############
-        haze_class = models.densenet121(pretrained=True)
-
-        self.conv0 = haze_class.features.conv0
-        self.norm0 = haze_class.features.norm0
-        self.relu0 = haze_class.features.relu0
-        self.pool0 = haze_class.features.pool0
-
-        ############# Block1-down 64-64  ##############
-        self.dense_block1 = haze_class.features.denseblock1
-        self.trans_block1 = haze_class.features.transition1
-
-        ############# Block2-down 32-32  ##############
-        self.dense_block2 = haze_class.features.denseblock2
-        self.trans_block2 = haze_class.features.transition2
-
-        ############# Block3-down 16-16 ##############
-        self.dense_block3 = haze_class.features.denseblock3
-        self.trans_block3 = haze_class.features.transition3
-
-        ############# Block4-up 8-8 ##############
-        self.dense_block4 = BottleneckDecoderBlock(512, 256)    # 512
-        self.trans_block4 = TransitionBlock(768, 128)           # 768
-        self.residual_block41 = ResidualBlock(128)              # Addition Blocks
-        self.residual_block42 = ResidualBlock(128)              # Addition Blocks
-        self.residual_block43 = ResidualBlock(128)              # Addition Blocks
-        self.residual_block44 = ResidualBlock(128)              # Addition Blocks
-        self.residual_block45 = ResidualBlock(128)              # Addition Blocks
-        self.residual_block46 = ResidualBlock(128)              # Addition Blocks
-
-    def forward(self, x):
-        # ---------------------------------------------------- #
-        # Encoder: Input Shape is assumed as (512, 512)        #
-        # ---------------------------------------------------- #
-        # 256 x 256
-        x0 = self.pool0(self.relu0(self.norm0(self.conv0(x))))
-
-        # 64 x 64
-        x1 = self.dense_block1(x0)
-        x1 = self.trans_block1(x1)
-
-        # 32 x 32
-        x2 = self.trans_block2(self.dense_block2(x1))
-
-        # 16 x 16
-        x3 = self.trans_block3(self.dense_block3(x2))
-
-        # 8 x 8
-        x4 = self.trans_block4(self.dense_block4(x3))
-        x4 = self.residual_block41(x4)
-        x4 = self.residual_block42(x4)
-        
-        return x1, x2, x4
 
 class Dense_At(nn.Module):
     def __init__(self):
         super(Dense_At, self).__init__()
 
         self.encoder   = Dense_encoder()
-        self.decoder_A = Dense_decoder()
-        self.decoder_T = Dense_decoder()
+        self.decoder_A = Dense_decoder(output_channel=3)
+        self.decoder_T = Dense_decoder(output_channel=3)
         # self.decoder_J = Dense_decoder()
 
         self.convT1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
@@ -292,11 +304,14 @@ class Dense_At(nn.Module):
         x1, x2, x4 = self.encoder(x)
 
         # ---------------------------------------------------- #
-        # Decoder: Input Shape is assumed as (8, 8)            #
+        # Decoder A : Input Shape is assumed as ...            #
         # ---------------------------------------------------- #
         A = self.decoder_A(x, x1, x2, x4)
-        T = self.decoder_T(x, x1, x2, x4)
 
+        # ---------------------------------------------------- #
+        # Decoder T : Input Shape is assumed as ...            #
+        # ---------------------------------------------------- # 
+        T = self.decoder_T(x, x1, x2, x4)
         T = self.sigT(self.convT(self.ResT(self.convT1(T))))
         T = torch.cat([T, T, T], 1)
         
@@ -350,3 +365,14 @@ class Dense_AtJ(nn.Module):
         J = (x - A * (1 - T)) / T
         
         return J, J_direct, A, T
+
+def myModelParamsTransition(model_from, model_to):
+    return
+
+def main():
+    x = torch.randn(1, 3, 512, 512)
+    model = Dense_At()
+    x, _, _ = model(x)
+
+if __name__ == "__main__":
+    main()
