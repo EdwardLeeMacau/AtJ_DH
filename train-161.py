@@ -22,7 +22,7 @@ from torch import optim as optim
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data.sampler import SubsetRandomSampler
 
-import model.AtJ_At as atj
+# import model.AtJ_At as atj
 from cmdparser import parser
 from datasets.data import DatasetFromFolder
 from misc_train import DehazeLoss, HazeLoss
@@ -204,12 +204,12 @@ def main():
             net_vgg.cuda()
 
     # Freezing Encoder
-    for i, child in enumerate(model.children()):
-        if i == 12: 
-            break
-
-        for param in child.parameters(): 
-            param.requires_grad = False 
+    # for i, child in enumerate(model.children()):
+    #     if i == 12: 
+    #         break
+    # 
+    #     for param in child.parameters(): 
+    #         param.requires_grad = False 
 
     # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
