@@ -24,10 +24,10 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 # import model.AtJ_At as atj
 from cmdparser import parser
-from datasets.data import DatasetFromFolder
+from datasets.data import MultiChannelDatasetFromFolder
 from misc_train import DehazeLoss, HazeLoss
 # from model.At_model import Dense
-from model.My_At_model_HSV import Dense_HSV
+from model.My_At_model_HSL import Dense_At
 from model.perceptual import Perceptual, vgg16ca
 from tensorboardX import SummaryWriter
 from torchvision.transforms import (Compose, Normalize, RandomHorizontalFlip,
@@ -107,7 +107,7 @@ def getDataLoaders(opt, train_transform, val_transform):
         TrainLoader and ValidationLoader
     """
     ntire_train_loader = DataLoader(
-        dataset=DatasetFromFolder(opt.dataroot, transform=train_transform), 
+        dataset=MultiChannelDatasetFromFolder(opt.dataroot, transform=train_transform), 
         num_workers=opt.workers, 
         batch_size=opt.batchSize, 
         pin_memory=True, 
@@ -115,7 +115,7 @@ def getDataLoaders(opt, train_transform, val_transform):
     )
 
     ntire_val_loader = DataLoader(
-        dataset=DatasetFromFolder(opt.valDataroot, transform=val_transform), 
+        dataset=MultiChannelDatasetFromFolder(opt.valDataroot, transform=val_transform), 
         num_workers=opt.workers, 
         batch_size=opt.valBatchSize, 
         pin_memory=True, 
@@ -178,7 +178,7 @@ def main():
     max_valssim, max_valssim_epoch = 0.0, 0
 
     # Deploy model and perceptual model
-    model = Dense_HSV(6)
+    model = Dense_At(num_layers=6)
     net_vgg = None
 
     if opt.netG:
@@ -204,12 +204,12 @@ def main():
             net_vgg.cuda()
 
     # Freezing Encoder
-    for i, child in enumerate(model.children()):
-        if i == 12: 
-            break
+    # for i, child in enumerate(model.children()):
+    #     if i == 12: 
+    #         break
 
-        for param in child.parameters(): 
-            param.requires_grad = False 
+    #     for param in child.parameters(): 
+    #         param.requires_grad = False 
 
     # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
