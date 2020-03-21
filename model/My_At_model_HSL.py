@@ -1,5 +1,5 @@
 """
-  Filename       [ My_At_model.py ]
+  Filename       [ My_At_model_HSV.py ]
   PackageName    [ AtJ_DH.model ]
   Synopsis       [ Self modified AtJ Model ] 
 """
@@ -118,37 +118,43 @@ class TransitionBlock(nn.Module):
         return F.upsample_nearest(out, scale_factor=2)
 
 class Dense_encoder(nn.Module):
-    def __init__(self):
+    def __init__(self, num_layers):
         super(Dense_encoder, self).__init__()
-        ############# 256-256  ##############
+
+        # ---------------------------------------------------- #
+        # Model Attributes                                     #
+        # ---------------------------------------------------- #
+        self.num_layers = num_layers
+
         haze_class = models.densenet121(pretrained=True)
 
-        self.conv0 = haze_class.features.conv0
+        # Output: 128 x 128
+        self.conv0 = nn.Conv2d(num_layers, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.norm0 = haze_class.features.norm0
         self.relu0 = haze_class.features.relu0
         self.pool0 = haze_class.features.pool0
 
-        ############# Block1-down 64-64  ##############
+        # Output: 64 x 64
         self.dense_block1 = haze_class.features.denseblock1
         self.trans_block1 = haze_class.features.transition1
 
-        ############# Block2-down 32-32  ##############
+        # Output: 32 x 32
         self.dense_block2 = haze_class.features.denseblock2
         self.trans_block2 = haze_class.features.transition2
 
-        ############# Block3-down 16-16 ##############
+        # Output: 16 x 16
         self.dense_block3 = haze_class.features.denseblock3
         self.trans_block3 = haze_class.features.transition3
 
-        ############# Block4-up 8-8 ##############
+        # Output: 8 x 8 
         self.dense_block4 = BottleneckDecoderBlock(512, 256)    # 512
         self.trans_block4 = TransitionBlock(768, 128)           # 768
         self.residual_block41 = ResidualBlock(128)              # Addition Blocks
         self.residual_block42 = ResidualBlock(128)              # Addition Blocks
-        self.residual_block43 = ResidualBlock(128)              # Addition Blocks
-        self.residual_block44 = ResidualBlock(128)              # Addition Blocks
-        self.residual_block45 = ResidualBlock(128)              # Addition Blocks
-        self.residual_block46 = ResidualBlock(128)              # Addition Blocks
+        # self.residual_block43 = ResidualBlock(128)              # Addition Blocks
+        # self.residual_block44 = ResidualBlock(128)              # Addition Blocks
+        # self.residual_block45 = ResidualBlock(128)              # Addition Blocks
+        # self.residual_block46 = ResidualBlock(128)              # Addition Blocks
 
     def forward(self, x):
         # ---------------------------------------------------- #
@@ -183,30 +189,30 @@ class Dense_decoder(nn.Module):
         self.trans_block5 = TransitionBlock(640, 128)
         self.residual_block51 = ResidualBlock(128)
         self.residual_block52 = ResidualBlock(128)
-        self.residual_block53 = ResidualBlock(128)
-        self.residual_block54 = ResidualBlock(128)
-        self.residual_block55 = ResidualBlock(128)
-        self.residual_block56 = ResidualBlock(128)
+        # self.residual_block53 = ResidualBlock(128)
+        # self.residual_block54 = ResidualBlock(128)
+        # self.residual_block55 = ResidualBlock(128)
+        # self.residual_block56 = ResidualBlock(128)
 
         ############# Block6-up 32-32   ##############
         self.dense_block6 = BottleneckDecoderBlock(256, 128)
         self.trans_block6 = TransitionBlock(384, 64)
         self.residual_block61 = ResidualBlock(64)
         self.residual_block62 = ResidualBlock(64)
-        self.residual_block63 = ResidualBlock(64)
-        self.residual_block64 = ResidualBlock(64)
-        self.residual_block65 = ResidualBlock(64)
-        self.residual_block66 = ResidualBlock(64)
+        # self.residual_block63 = ResidualBlock(64)
+        # self.residual_block64 = ResidualBlock(64)
+        # self.residual_block65 = ResidualBlock(64)
+        # self.residual_block66 = ResidualBlock(64)
 
         ############# Block7-up 64-64   ##############
         self.dense_block7 = BottleneckDecoderBlock(64, 64)
         self.trans_block7 = TransitionBlock(128, 32)
         self.residual_block71 = ResidualBlock(32)
         self.residual_block72 = ResidualBlock(32)
-        self.residual_block73 = ResidualBlock(32)
-        self.residual_block74 = ResidualBlock(32)
-        self.residual_block75 = ResidualBlock(32)
-        self.residual_block76 = ResidualBlock(32)
+        # self.residual_block73 = ResidualBlock(32)
+        # self.residual_block74 = ResidualBlock(32)
+        # self.residual_block75 = ResidualBlock(32)
+        # self.residual_block76 = ResidualBlock(32)
 
         ## 128 X  128
         ############# Block8-up c  ##############
@@ -214,18 +220,19 @@ class Dense_decoder(nn.Module):
         self.trans_block8 = TransitionBlock(64, 16)
         self.residual_block81 = ResidualBlock(16)
         self.residual_block82 = ResidualBlock(16)
-        self.residual_block83 = ResidualBlock(16)
-        self.residual_block84 = ResidualBlock(16)
-        self.residual_block85 = ResidualBlock(16)
-        self.residual_block86 = ResidualBlock(16)
-        self.conv_refin = nn.Conv2d(19, 20, 3, 1, 1)
+        # self.residual_block83 = ResidualBlock(16)
+        # self.residual_block84 = ResidualBlock(16)
+        # self.residual_block85 = ResidualBlock(16)
+        # self.residual_block86 = ResidualBlock(16)
+
+        self.conv_refin = nn.Conv2d(22, 20, 3, 1, 1)
         self.tanh = nn.Tanh()
         self.conv1010 = nn.Conv2d(20, 1, kernel_size=1, stride=1, padding=0)  # 1mm
         self.conv1020 = nn.Conv2d(20, 1, kernel_size=1, stride=1, padding=0)  # 1mm
         self.conv1030 = nn.Conv2d(20, 1, kernel_size=1, stride=1, padding=0)  # 1mm
         self.conv1040 = nn.Conv2d(20, 1, kernel_size=1, stride=1, padding=0)  # 1mm
-        self.refine3 = nn.Conv2d(20 + 4, 3, kernel_size=3, stride=1, padding=1)
-        self.upsample = F.upsample_nearest
+        self.refine3  = nn.Conv2d(20 + 4, 3, kernel_size=3, stride=1, padding=1)
+        self.upsample = F.interpolate
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x, x1, x2, x4):
@@ -272,10 +279,10 @@ class Dense_decoder(nn.Module):
         return dehaze
 
 class Dense_At(nn.Module):
-    def __init__(self):
+    def __init__(self, num_layers):
         super(Dense_At, self).__init__()
 
-        self.encoder   = Dense_encoder()
+        self.encoder   = Dense_encoder(num_layers)
         self.decoder_A = Dense_decoder()
         self.decoder_T = Dense_decoder()
         # self.decoder_J = Dense_decoder()
@@ -300,7 +307,10 @@ class Dense_At(nn.Module):
         T = self.sigT(self.convT(self.ResT(self.convT1(T))))
         T = torch.cat([T, T, T], 1)
         
-        J = (x - A * (1 - T)) / T
+        # ---------------------------------------------------- #
+        # I(x) = J(x) t(x) * A(x) (1 - t(x)) in RGB            #
+        # ---------------------------------------------------- #
+        J = (x[:, :3] - A * (1 - T)) / T
         
         return J, A, T
 
@@ -350,3 +360,11 @@ class Dense_AtJ(nn.Module):
         J = (x - A * (1 - T)) / T
         
         return J, J_direct, A, T
+
+def main():
+    x = torch.randn(1, 6, 512, 512)
+    model = Dense_At(num_layers=6)
+    x, _, _ = model(x)
+
+if __name__ == "__main__":
+    main()

@@ -5,6 +5,7 @@
 """
 
 import os
+import numpy as np
 from collections.abc import Container
 
 import torch.utils.data as data
@@ -12,6 +13,90 @@ from PIL import Image, ImageFile
 
 # Set True to load truncated files
 ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+def rgb_to_hsv(rgb):
+    """ 
+    RGB to HSV conversion in numpy 
+    
+    Parameters
+    ----------
+    rgb : numpy.ndarray
+        Image in range [0, 255] 
+    
+    Return
+    ------
+    hsv : numpy.ndarray
+        Image in range (h-(0, 1), s-(0, 1), v-(0, 1))
+    """
+    rgb = rgb.astype(np.float)
+    hsv = np.zeros_like(rgb)
+
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    maxc = np.max(rgb, axis=-1)
+    minc = np.min(rgb, axis=-1)
+
+    hsv[..., 2] = maxc
+    mask = maxc != minc
+    hsv[mask, 1] = (maxc - minc)[mask] / maxc[mask]
+    rc = np.zeros_like(r)
+    gc = np.zeros_like(g)
+    bc = np.zeros_like(b)
+    rc[mask] = (maxc - r)[mask] / (maxc - minc)[mask]
+    gc[mask] = (maxc - g)[mask] / (maxc - minc)[mask]
+    bc[mask] = (maxc - b)[mask] / (maxc - minc)[mask]
+    hsv[..., 0] = np.select(
+        [r == maxc, g == maxc], [bc - gc, 2.0 + rc - bc], default=4.0 + gc - rc)
+    hsv[..., 0] = (hsv[..., 0] / 6.0) % 1.0
+    
+    return hsv
+
+def rgb_to_hsl(rgb):
+    """ 
+    RGB to HSL conversion in numpy 
+    
+    Parameters
+    ----------
+    rgb : numpy.ndarray
+        Image in range [0, 255] 
+    
+    Return
+    ------
+    hsv : numpy.ndarray
+        Image in range :(h-(0, 1), s-(0, 1), v-(0, 1))
+    """
+    rgb = rgb.astype(np.float)
+    rgb = rgb / 255
+    hsl = np.zeros_like(rgb)
+
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    maxc = np.max(rgb, axis=-1)
+    minc = np.min(rgb, axis=-1)
+
+    # Lightness: 0.5 * (max + min)
+    hsl[..., 2] = 0.5 * (maxc + minc)
+
+    # Saturated
+    mask = ((maxc != minc) and hsl[..., 2] != 0)
+    hsl[mask, 1] = np.select(
+        [hsl[..., 2] < 0.5, hsl[..., 2] > 0.5], 
+        [(maxc - minc) / (2 * hsl[..., 2]), (maxc - minc) / (2 - 2 * hsl[..., 2])]
+    )
+
+    # Hue
+    mask = (maxc != minc)
+
+    rc = np.zeros_like(r)
+    gc = np.zeros_like(g)
+    bc = np.zeros_like(b)
+    rc[mask] = (maxc - r)[mask] / (maxc - minc)[mask]
+    gc[mask] = (maxc - g)[mask] / (maxc - minc)[mask]
+    bc[mask] = (maxc - b)[mask] / (maxc - minc)[mask]
+
+    hsl[..., 0] = np.select([r == maxc, g == maxc], [bc - gc, 2.0 + rc - bc], default=4.0 + gc - rc)
+    hsl[..., 0] = (hsl[..., 0] / 6.0) % 1.0
+    
+    return hsl
+
 
 def is_image_file(filename) -> bool:
     """
@@ -156,5 +241,3 @@ class MultiChannelDatasetFromFolder(data.Dataset):
 
     def __len__(self):
         return len(self.data_filenames)
-
-
