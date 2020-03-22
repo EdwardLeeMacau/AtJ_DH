@@ -22,7 +22,7 @@ from torch import optim as optim
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data.sampler import SubsetRandomSampler
 
-import model.AtJ_At as atj
+# import model.AtJ_At as atj
 from cmdparser import parser
 from datasets.data import DatasetFromFolder
 from misc_train import DehazeLoss, HazeLoss
@@ -38,14 +38,22 @@ def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion,
     """
     Parameters
     ----------
-    perceptual : optional
+    data, target : torch.Tensor
+
+    model : nn.Module
+
+    optimizer : optim.Optimizer
+
+    criterion : nn.Module
+
+    perceptual : { nn.Module, None } optional
         Perceptual loss is applied if nn.Module is provided.
     
     gamma : float
-        The ratio of DeHaze - Target Pair and ReHaze - Data Pair.
+        The ratio of ReHaze - Data Pair.
 
     kappa : float
-        The ratio of criterion and perceptual loss.
+        The ratio of perceptual loss.
     """
     optimizer.zero_grad()
 
@@ -60,6 +68,48 @@ def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion,
         amap, tmap = output[1], output[2]
         rehaze = target * tmap + amap * (1 - tmap)
         loss += gamma * HazeLoss(rehaze, data, criterion, perceptual, kappa=kappa)
+
+    loss.backward()
+    optimizer.step()
+
+    return loss.item()
+
+def trainWithAT(data, A, t, target, model: nn.Module, optimizer: optim.Optimizer, criterion, perceptual=None, gamma=0, kappa=0):
+    """
+    Parameters
+    ----------
+    data, A, t, target : torch.Tensor
+
+    model : nn.Module
+
+    optimizer : optim.Optimizer
+
+    criterion : nn.Module
+
+    perceptual : { nn.Module, None } optional
+        Perceptual loss is applied if nn.Module is provided.
+    
+    gamma : float
+        The ratio of ReHaze - Data Pair.
+
+    kappa : float
+        The ratio of perceptual loss.
+    """
+    optimizer.zero_grad()
+
+    dehaze, A_hat, t_hat = model(data)
+
+    # DeHaze - Target Pair
+    loss = DehazeLoss(dehaze, target, criterion, perceptual, kappa=kappa) 
+    
+    # ReHaze - Data Pair
+    if gamma != 0: 
+        rehaze = target * t_hat + A_hat * (1 - t_hat)
+        loss += gamma * HazeLoss(rehaze, data, criterion, perceptual, kappa=kappa)
+
+    # A_Hat - A Pair
+    loss += criterion(A_hat, A)
+    loss += criterion(t_hat, t)
 
     loss.backward()
     optimizer.step()
@@ -213,12 +263,12 @@ def main():
             net_vgg.cuda()
 
     # Freezing Encoder
-    for i, child in enumerate(model.children()):
-        if i == 12: 
-            break
-
-        for param in child.parameters(): 
-            param.requires_grad = False 
+    # for i, child in enumerate(model.children()):
+    #     if i == 12: 
+    #         break
+    # 
+    #     for param in child.parameters(): 
+    #         param.requires_grad = False 
 
     # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
@@ -243,40 +293,8 @@ def main():
                 data, target = packet1
                 data, target = data.float().cuda(), target.float().cuda() 
 
-                optimizer.zero_grad()
+                loss = train(data, target, model, optimizer, criterionMSE, vgg16ca, gamma, kappa)
 
-                outputs = model(data)[0]
-
-                L2 = criterionMSE(outputs, target)
-
-                if kappa != 0:
-                    outputsvgg = net_vgg(outputs)
-                    targetvgg = net_vgg(target)
-                    Lp = sum([criterionMSE(outputVGG, targetVGG) for (outputVGG, targetVGG) in zip(outputsvgg, targetvgg)])
-                    loss = L2 + kappa * Lp
-
-                else:
-                    loss = L2
-
-                # ----------------------------------------------------- #
-                # Mapping REHAZE - HAZE(I), with Perceptual Loss        #
-                # ----------------------------------------------------- #
-                # rehaze = target * t + A * (1 - t)
-                
-                # L2 = criterionMSE(rehaze, data)
-
-                # if kappa != 0:
-                #     rehazevgg = net_vgg(rehaze)
-                #     datavgg = net_vgg(data)
-                #     Lp = sum([criterionMSE(rehazeVGG, dataVGG) for (rehazeVGG, dataVGG) in zip(rehazesvgg, datavgg)])
-                #     loss = L2 + kappa * Lp
-
-                # else:
-                #     loss = L2
-                
-                # Update parameters
-                loss.backward()
-                optimizer.step()
                 running_loss += loss.item()
 
                 # ----------------------------------------------------- #
@@ -285,25 +303,9 @@ def main():
                 data, A, t, target = packet2
                 data, A, t, target = data.float().cuda(), A.float().cuda(), t.float.cuda(), target.float().cuda() 
                 
-                optimizer.zero_grad()
-                
-                outputs, A_hat, t_hat = model(data)
-                L2 = criterionMSE(outputs, target)
-                L2 += criterionMSE(t_hat, t)
-                L2 += criterionMSE(A_hat, A)
-
-                if kappa != 0:
-                    outputsvgg = net_vgg(outputs)
-                    targetvgg = net_vgg(target)
-                    Lp = sum([criterionMSE(outputVGG, targetVGG) for (outputVGG, targetVGG) in zip(outputsvgg, targetvgg)])
-                    loss = L2 + kappa * Lp
-
-                else:
-                    loss = L2
+                loss = trainWithAT(data, A, t, target, model, optimizer, criterionMSE, vgg16ca, gamma, kappa)
                 
                 # Update parameters
-                loss.backward()
-                optimizer.step()
                 running_loss += loss.item()
                 
                 # ----------------------------------------------------- #
@@ -336,15 +338,6 @@ def main():
 
                             output = model(data)[0]
                             L2 = criterionMSE(output, target)
-
-                            if kappa != 0:
-                                outputvgg = net_vgg(output)
-                                targetvgg = net_vgg(target)
-                                Lp = sum([criterionMSE(outputVGG, targetVGG.detach()) for (outputVGG, targetVGG) in zip(outputvgg, targetvgg)])
-                                loss = L2.item() + kappa * Lp.item()
-
-                            else:
-                                loss = L2.item()
                                 
                             # tensor to ndarr to get PSNR, SSIM
                             tensors = [output.data.cpu(), target.data.cpu()]

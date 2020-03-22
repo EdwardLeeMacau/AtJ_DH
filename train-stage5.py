@@ -22,7 +22,7 @@ from torch import optim as optim
 from torch.optim.lr_scheduler import StepLR
 from torch.utils.data.sampler import SubsetRandomSampler
 
-import model.AtJ_At as atj
+# import model.AtJ_At as atj
 from cmdparser import parser
 from datasets.data import DatasetFromFolder
 from misc_train import DehazeLoss, HazeLoss
@@ -276,15 +276,6 @@ def main():
 
                             output = model(data)[0]
                             L2 = criterionMSE(output, target)
-
-                            if kappa != 0:
-                                outputvgg = net_vgg(output)
-                                targetvgg = net_vgg(target)
-                                Lp = sum([criterionMSE(outputVGG, targetVGG.detach()) for (outputVGG, targetVGG) in zip(outputvgg, targetvgg)])
-                                loss = L2.item() + kappa * Lp.item()
-
-                            else:
-                                loss = L2.item()
                                 
                             # tensor to ndarr to get PSNR, SSIM
                             tensors = [output.data.cpu(), target.data.cpu()]
