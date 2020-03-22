@@ -359,7 +359,7 @@ class Dense_AtJ(nn.Module):
         T = self.sigT(self.convT(self.ResT(self.convT1(T))))
         T = torch.cat([T, T, T], 1)
         
-        J = (x - A * (1 - T)) / T
+        J = (x[:, :3] - A * (1 - T)) / T
         
         return J, J_direct, A, T
 
