@@ -8,6 +8,7 @@ import argparse
 import os
 import random
 import time
+from math import log10
 
 import numpy as np
 import torch
@@ -15,12 +16,14 @@ import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
 import torch.optim as optim
-from torch.utils.data import DataLoader
 from matplotlib import pyplot as plt
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 from torch import optim as optim
 from torch.optim.lr_scheduler import StepLR
+from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
+from torchvision.transforms import (Compose, Normalize, RandomHorizontalFlip,
+                                    RandomVerticalFlip, ToTensor)
 
 # import model.AtJ_At as atj
 from cmdparser import parser
@@ -29,11 +32,10 @@ from misc_train import DehazeLoss, HazeLoss
 from model.At_model import Dense
 from model.perceptual import Perceptual, vgg16ca
 from tensorboardX import SummaryWriter
-from torchvision.transforms import (Compose, Normalize, RandomHorizontalFlip,
-                                    RandomVerticalFlip, ToTensor)
+from transforms.ssim import ssim as SSIM
 from utils.utils import norm_ip, norm_range
 
-MEAN, STD = None
+MEAN, STD = None, None
 
 def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion, perceptual=None, gamma=0, kappa=0):
     """
@@ -219,7 +221,7 @@ def main():
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
         lr = opt.learningRate, 
-        weight_decay=0.00005
+        weight_decay=5e-5
     )
 
     scheduler = StepLR(optimizer, step_size=opt.step, gamma=opt.gamma)
@@ -300,6 +302,7 @@ def main():
                         for j, (data, target) in enumerate(valDataloader, 1):
                             data, target = data.float().cuda(), target.float().cuda()
 
+                            # MSE Loss Only
                             output = model(data)[0]
 
                             # Back to domain 0 ~ 1
@@ -309,7 +312,7 @@ def main():
                             loss = criterionMSE(output, target)
 
                             # PSNR / SSIM in torch.Tensor
-                            psnr = 10 * torch.log10(1 / loss.item())
+                            psnr = 10 * log10(1 / loss.item())
                             ssim = SSIM(output, target)
                             
                             valLoss += loss

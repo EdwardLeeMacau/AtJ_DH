@@ -8,6 +8,7 @@ import argparse
 import os
 import random
 import time
+from math import log10
 
 import numpy as np
 import torch
@@ -35,6 +36,7 @@ from tensorboardX import SummaryWriter
 from transforms.ssim import ssim as SSIM
 from utils.utils import norm_ip, norm_range
 
+MEAN, STD = None, None
 
 def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion, perceptual=None, gamma=0, kappa=0):
     """
@@ -180,7 +182,7 @@ def main():
     max_valssim, max_valssim_epoch = 0.0, 0
 
     # Deploy model and perceptual model
-    model = Dense_At(num_layers=6)
+    model = Dense_At()
     net_vgg = None
 
     if opt.netG:
@@ -205,10 +207,14 @@ def main():
         if kappa != 0: 
             net_vgg.cuda()
 
+    MEAN = torch.Tensor([0.485, 0.456, 0.406]).cuda()
+    STD  = torch.Tensor([0.229, 0.224, 0.225]).cuda()
+
     # Freezing Encoder
     # for i, child in enumerate(model.children()):
     #     if i == 12: 
     #         break
+    #
     #     for param in child.parameters(): 
     #         param.requires_grad = False 
 
@@ -307,7 +313,7 @@ def main():
                             loss = criterionMSE(output, target)
 
                             # PSNR / SSIM in torch.Tensor
-                            psnr = 10 * torch.log10(1 / loss)
+                            psnr = 10 * log10(1 / loss)
                             ssim = SSIM(output, target)
                             
                             valLoss += loss
