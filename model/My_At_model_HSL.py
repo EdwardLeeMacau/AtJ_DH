@@ -12,7 +12,6 @@ import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 import torchvision.models as models
 
-
 class BottleneckDecoderBlock(nn.Module):
     def __init__(self, in_planes, out_planes, dropRate=0.0):
         super(BottleneckDecoderBlock, self).__init__()
@@ -115,36 +114,33 @@ class TransitionBlock(nn.Module):
         if self.droprate > 0:
             out = F.dropout(out, p=self.droprate, inplace=False, training=self.training)
 
-        return F.upsample_nearest(out, scale_factor=2)
+        return F.interpolate(out, scale_factor=2)
 
 class Dense_encoder(nn.Module):
-    def __init__(self, num_layers):
+    def __init__(self, imageModel=models.densenet121(pretrained=True)):
         super(Dense_encoder, self).__init__()
 
         # ---------------------------------------------------- #
         # Model Attributes                                     #
         # ---------------------------------------------------- #
-        self.num_layers = num_layers
-
-        haze_class = models.densenet121(pretrained=True)
 
         # Output: 128 x 128
-        self.conv0 = nn.Conv2d(num_layers, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.norm0 = haze_class.features.norm0
-        self.relu0 = haze_class.features.relu0
-        self.pool0 = haze_class.features.pool0
+        self.conv0 = imageModel.features.conv0
+        self.norm0 = imageModel.features.norm0
+        self.relu0 = imageModel.features.relu0
+        self.pool0 = imageModel.features.pool0
 
         # Output: 64 x 64
-        self.dense_block1 = haze_class.features.denseblock1
-        self.trans_block1 = haze_class.features.transition1
+        self.dense_block1 = imageModel.features.denseblock1
+        self.trans_block1 = imageModel.features.transition1
 
         # Output: 32 x 32
-        self.dense_block2 = haze_class.features.denseblock2
-        self.trans_block2 = haze_class.features.transition2
+        self.dense_block2 = imageModel.features.denseblock2
+        self.trans_block2 = imageModel.features.transition2
 
         # Output: 16 x 16
-        self.dense_block3 = haze_class.features.denseblock3
-        self.trans_block3 = haze_class.features.transition3
+        self.dense_block3 = imageModel.features.denseblock3
+        self.trans_block3 = imageModel.features.transition3
 
         # Output: 8 x 8 
         self.dense_block4 = BottleneckDecoderBlock(512, 256)    # 512
@@ -185,8 +181,8 @@ class Dense_decoder(nn.Module):
     def __init__(self):
         super(Dense_decoder, self).__init__()
         ############# Block5-up 16-16 ##############
-        self.dense_block5 = BottleneckDecoderBlock(384, 256)
-        self.trans_block5 = TransitionBlock(640, 128)
+        self.dense_block5 = BottleneckDecoderBlock(768, 256)        # 384 -> 768
+        self.trans_block5 = TransitionBlock(1024, 128)              # 640 -> 1024
         self.residual_block51 = ResidualBlock(128)
         self.residual_block52 = ResidualBlock(128)
         # self.residual_block53 = ResidualBlock(128)
@@ -195,8 +191,8 @@ class Dense_decoder(nn.Module):
         # self.residual_block56 = ResidualBlock(128)
 
         ############# Block6-up 32-32   ##############
-        self.dense_block6 = BottleneckDecoderBlock(256, 128)
-        self.trans_block6 = TransitionBlock(384, 64)
+        self.dense_block6 = BottleneckDecoderBlock(384, 128)        # 256 -> 384
+        self.trans_block6 = TransitionBlock(512, 64)                # 384 -> 512
         self.residual_block61 = ResidualBlock(64)
         self.residual_block62 = ResidualBlock(64)
         # self.residual_block63 = ResidualBlock(64)
@@ -279,12 +275,13 @@ class Dense_decoder(nn.Module):
         return dehaze
 
 class Dense_At(nn.Module):
-    def __init__(self, num_layers):
+    def __init__(self):
         super(Dense_At, self).__init__()
 
-        self.encoder   = Dense_encoder(num_layers)
-        self.decoder_A = Dense_decoder()
-        self.decoder_T = Dense_decoder()
+        self.encoder_RGB = Dense_encoder(imageModel=models.densenet121(pretrained=True))
+        self.encoder_HSV = Dense_encoder(imageModel=models.densenet121(pretrained=False))
+        self.decoder_A   = Dense_decoder()
+        self.decoder_T   = Dense_decoder()
         # self.decoder_J = Dense_decoder()
 
         self.convT1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
@@ -294,9 +291,14 @@ class Dense_At(nn.Module):
 
     def forward(self, x):
         # ---------------------------------------------------- #
-        # Encoder: Input Shape is assumed as (512, 512)        #
+        # Encoder: Input Shape is assumed as (6, 512, 512)     #
         # ---------------------------------------------------- #
-        x1, x2, x4 = self.encoder(x)
+        x11, x21, x41 = self.encoder_RGB(x[:, :3])
+        x12, x22, x42 = self.encoder_HSV(x[:, 3:])
+
+        x1 = torch.cat((x11, x12), dim=1)
+        x2 = torch.cat((x21, x22), dim=1)
+        x4 = torch.cat((x41, x42), dim=1)
 
         # ---------------------------------------------------- #
         # Decoder: Input Shape is assumed as (8, 8)            #
@@ -363,7 +365,7 @@ class Dense_AtJ(nn.Module):
 
 def main():
     x = torch.randn(1, 6, 512, 512)
-    model = Dense_At(num_layers=6)
+    model = Dense_At()
     x, _, _ = model(x)
 
 if __name__ == "__main__":

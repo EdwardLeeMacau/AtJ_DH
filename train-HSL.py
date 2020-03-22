@@ -15,12 +15,14 @@ import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
 import torch.optim as optim
-from torch.utils.data import DataLoader
 from matplotlib import pyplot as plt
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 from torch import optim as optim
 from torch.optim.lr_scheduler import StepLR
+from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
+from torchvision.transforms import (Compose, Normalize, RandomHorizontalFlip,
+                                    RandomVerticalFlip, ToTensor)
 
 # import model.AtJ_At as atj
 from cmdparser import parser
@@ -30,9 +32,9 @@ from misc_train import DehazeLoss, HazeLoss
 from model.My_At_model_HSV import Dense_HSV
 from model.perceptual import Perceptual, vgg16ca
 from tensorboardX import SummaryWriter
-from torchvision.transforms import (Compose, Normalize, RandomHorizontalFlip,
-                                    RandomVerticalFlip, ToTensor)
+from transforms.ssim import ssim as SSIM
 from utils.utils import norm_ip, norm_range
+
 
 def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion, perceptual=None, gamma=0, kappa=0):
     """
@@ -178,7 +180,7 @@ def main():
     max_valssim, max_valssim_epoch = 0.0, 0
 
     # Deploy model and perceptual model
-    model = Dense_HSV(6)
+    model = Dense_HSV()
     net_vgg = None
 
     if opt.netG:
@@ -204,18 +206,18 @@ def main():
             net_vgg.cuda()
 
     # Freezing Encoder
-    for i, child in enumerate(model.children()):
-        if i == 12: 
-            break
-
-        for param in child.parameters(): 
-            param.requires_grad = False 
+    # for i, child in enumerate(model.children()):
+    #     if i == 12: 
+    #         break
+    # 
+    #     for param in child.parameters(): 
+    #         param.requires_grad = False 
 
     # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
         lr = opt.learningRate, 
-        weight_decay=0.00005
+        weight_decay=5e-5
     )
 
     scheduler = StepLR(optimizer, step_size=opt.step, gamma=opt.gamma)
@@ -223,7 +225,7 @@ def main():
     # Main Loop of training
     t0 = time.time()
 
-    with SummaryWriter(comment='AtJ_DH') as writer:
+    with SummaryWriter(comment=opt.comment) as writer:
         for epoch in range(startepoch, epochs):
             model.train() 
 
@@ -296,36 +298,19 @@ def main():
                         for j, (data, target) in enumerate(valDataloader, 1):
                             data, target = data.float().cuda(), target.float().cuda()
 
+                            # MSE Loss Only
                             output = model(data)[0]
+
+                            # Back to domain 0 ~ 1
+                            target.mul_(torch.Tensor([0.229, 0.224, 0.225]).reshape(3, 1, 1)).add_(torch.Tensor([0.485, 0.456, 0.406]).reshape(3, 1, 1))
+                            output.mul_(torch.Tensor([0.229, 0.224, 0.225]).reshape(3, 1, 1)).add_(torch.Tensor([0.485, 0.456, 0.406]).reshape(3, 1, 1))
+
                             loss = criterionMSE(output, target)
 
-                            # L2 = criterionMSE(output, target)
+                            # PSNR / SSIM in torch.Tensor
+                            psnr = 10 * torch.log10(1 / loss)
+                            ssim = SSIM(output, target)
                             
-                            # if kappa != 0:
-                            #     outputvgg = net_vgg(output)
-                            #     targetvgg = net_vgg(target)
-                            #     Lp = sum([criterionMSE(outputVGG, targetVGG.detach()) for (outputVGG, targetVGG) in zip(outputvgg, targetvgg)])
-                            #     loss = L2.item() + kappa * Lp.item()
-
-                            # else:
-                            #     loss = L2.item()
-                                
-                            # tensor to ndarr to get PSNR, SSIM
-                            tensors = [output.data.cpu(), target.data.cpu()]
-                            npimgs = [] 
-
-                            for t in tensors: 
-                                t = torch.squeeze(t)
-                                t = norm_range(t, None)
-
-                                npimg = t.mul(255).byte().numpy()
-                                npimg = np.transpose(npimg, (1, 2, 0)) # CHW to HWC
-                                npimgs.append(npimg)
-
-                            # Calculate PSNR and SSIM
-                            psnr = peak_signal_noise_ratio(npimgs[0], npimgs[1])
-                            ssim = structural_similarity(npimgs[0], npimgs[1], multichannel = True)
-
                             valLoss += loss
                             valPSNR += psnr
                             valSSIM += ssim 
