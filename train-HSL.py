@@ -314,7 +314,8 @@ def main():
 
                             # PSNR / SSIM in torch.Tensor
                             psnr = 10 * log10(1 / loss)
-                            ssim = SSIM(output, target)
+                            ssim = 0 
+                            # ssim = SSIM(output, target)
                             
                             valLoss += loss
                             valPSNR += psnr
@@ -348,9 +349,9 @@ def main():
                                 os.path.join(opt.outdir, 'AtJ_DH_MaxCKPT.pth')
                             ) 
 
-                        if valSSIM > max_valssim:
-                            max_valssim = valSSIM
-                            max_valssim_epoch = epoch + 1
+                        # if valSSIM > max_valssim:
+                        #     max_valssim = valSSIM
+                        #     max_valssim_epoch = epoch + 1
 
                     # Show Message
                     print('>> Epoch {:d} VALIDATION: Loss: {:.3f}, PSNR: {:.3f}, SSIM: {:.3f}'.format(
