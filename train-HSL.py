@@ -53,11 +53,10 @@ def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion,
     """
     optimizer.zero_grad()
 
-    output = model(data)
+    output, amap, tmap = model(data)
 
     # DeHaze - Target Pair
-    dehaze = output[0]
-    loss = DehazeLoss(dehaze, target, criterion, perceptual, kappa=kappa) 
+    loss = DehazeLoss(output, target, criterion, perceptual, kappa=kappa) 
     
     # ReHaze - Data Pair
     if gamma != 0: 
@@ -236,44 +235,12 @@ def main():
 
             for i, (data, target) in enumerate(dataloader, 1): 
                 # ----------------------------------------------------- #
-                # Mapping DEHAZE - GT, with Perceptual Loss             #
+                # Train Loop                                            #
                 # ----------------------------------------------------- #
                 data, target = data.float().cuda(), target.float().cuda() 
 
-                optimizer.zero_grad()
-
-                outputs, A, t = model(data)
-
-                L2 = criterionMSE(outputs, target)
-
-                if kappa != 0:
-                    outputsvgg = net_vgg(outputs)
-                    targetvgg  = net_vgg(target)
-                    Lp = sum([criterionMSE(outputVGG, targetVGG) for (outputVGG, targetVGG) in zip(outputsvgg, targetvgg)])
-                    loss = L2 + kappa * Lp
-                else:
-                    loss = L2
-
-                # ----------------------------------------------------- #
-                # Mapping REHAZE - HAZE(I), with Perceptual Loss        #
-                # ----------------------------------------------------- #
-                if gamma != 0:
-                    rehaze = target * t + A * (1 - t)
-                    
-                    RehazeL2 = criterionMSE(rehaze, data)
-
-                    if kappa != 0:
-                        rehazesvgg = net_vgg(rehaze)
-                        datasvgg   = net_vgg(data)
-                        RehazeLp   = sum([criterionMSE(rehazeVGG, dataVGG) for (rehazeVGG, dataVGG) in zip(rehazesvgg, datasvgg)])
-                        loss += gamma * RehazeL2 + kappa * RehazeLp
-                    else:
-                        loss += gamma * RehazeL2
-                    
-                # Update parameters
-                loss.backward()
-                optimizer.step()
-                running_loss += loss.item()
+                loss = train(data, target, model, optimizer, criterionMSE, net_vgg, gamma, kappa)
+                running_loss += loss
                 
                 # ----------------------------------------------------- #
                 # Print Loop                                            #
@@ -310,21 +277,19 @@ def main():
                             target.mul_(STD).add_(MEAN)
                             output.mul_(STD).add_(MEAN)
 
-                            loss = criterionMSE(output, target)
-
-                            # PSNR / SSIM in torch.Tensor
-                            psnr = 10 * log10(1 / loss)
-                            ssim = 0 
-                            # ssim = SSIM(output, target)
-                            
-                            valLoss += loss
-                            valPSNR += psnr
-                            valSSIM += ssim 
+                            for k in range(output.shape[0]):
+                                loss = criterionMSE(output[k], target[k]).item()
+                                psnr = 10 * log10(1 / loss)
+                                ssim = 0 
+                                
+                                valLoss += loss
+                                valPSNR += psnr
+                                valSSIM += ssim 
 
                         # Print Summary
-                        valLoss = valLoss / len(valDataloader)
-                        valPSNR = valPSNR / len(valDataloader)
-                        valSSIM = valSSIM / len(valDataloader)
+                        valLoss = valLoss / len(valDataloader.dataset)
+                        valPSNR = valPSNR / len(valDataloader.dataset)
+                        valSSIM = valSSIM / len(valDataloader.dataset)
 
                         writer.add_scalar('./scalar/valLoss', valLoss, epoch * len(dataloader) + i)
                         writer.add_scalar('./scalar/valPSNR', valPSNR, epoch * len(dataloader) + i)
