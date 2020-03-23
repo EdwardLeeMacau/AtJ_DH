@@ -207,8 +207,8 @@ def main():
         if kappa != 0: 
             net_vgg.cuda()
 
-    MEAN = torch.Tensor([0.485, 0.456, 0.406]).cuda()
-    STD  = torch.Tensor([0.229, 0.224, 0.225]).cuda()
+    MEAN = torch.Tensor([0.485, 0.456, 0.406]).reshape([3, 1, 1]).cuda()
+    STD  = torch.Tensor([0.229, 0.224, 0.225]).reshape([3, 1, 1]).cuda()
 
     # Freezing Encoder
     # for i, child in enumerate(model.children()):
@@ -307,8 +307,8 @@ def main():
                             output = model(data)[0]
 
                             # Back to domain 0 ~ 1
-                            target.mul_(torch.Tensor([0.229, 0.224, 0.225]).reshape(3, 1, 1)).add_(torch.Tensor([0.485, 0.456, 0.406]).reshape(3, 1, 1))
-                            output.mul_(torch.Tensor([0.229, 0.224, 0.225]).reshape(3, 1, 1)).add_(torch.Tensor([0.485, 0.456, 0.406]).reshape(3, 1, 1))
+                            target.mul_(STD).add_(MEAN)
+                            output.mul_(STD).add_(MEAN)
 
                             loss = criterionMSE(output, target)
 
