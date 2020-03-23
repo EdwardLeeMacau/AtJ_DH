@@ -310,25 +310,25 @@ def main():
                             target.mul_(STD).add_(MEAN)
                             output.mul_(STD).add_(MEAN)
 
-                            loss = criterionMSE(output, target)
-
-                            # PSNR / SSIM in torch.Tensor
-                            psnr = 10 * log10(1 / loss)
-                            ssim = 0 
-                            # ssim = SSIM(output, target)
+                            for k in range(output.shape[0]):
+                                loss = criterionMSE(output, target)
+                                psnr = 10 * log10(1 / loss)
+                                ssim = 0 # SSIM(output, target)
                             
-                            valLoss += loss
-                            valPSNR += psnr
-                            valSSIM += ssim 
+                                valLoss += loss
+                                valPSNR += psnr
+                                valSSIM += ssim 
 
                         # Print Summary
-                        valLoss = valLoss / len(valDataloader)
-                        valPSNR = valPSNR / len(valDataloader)
-                        valSSIM = valSSIM / len(valDataloader)
+                        valLoss = valLoss / len(valDataloader.dataset)
+                        valPSNR = valPSNR / len(valDataloader.dataset)
+                        valSSIM = valSSIM / len(valDataloader.dataset)
 
-                        writer.add_scalar('./scalar/valLoss', valLoss, epoch * len(dataloader) + i)
-                        writer.add_scalar('./scalar/valPSNR', valPSNR, epoch * len(dataloader) + i)
-                        writer.add_scalar('./scalar/valSSIM', valSSIM, epoch * len(dataloader) + i)
+                        # Draw Graph
+                        total_iterations = epoch * len(dataloader) + i
+                        writer.add_scalar('./scalar/valLoss', valLoss, total_iterations)
+                        writer.add_scalar('./scalar/valPSNR', valPSNR, total_iterations)
+                        writer.add_scalar('./scalar/valSSIM', valSSIM, total_iterations)
                        
                         # Save if update the best
                         if valLoss < min_valloss:
