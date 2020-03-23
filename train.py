@@ -206,8 +206,8 @@ def main():
         if kappa != 0: 
             net_vgg.cuda()
 
-    MEAN = torch.Tensor([0.485, 0.456, 0.406]).cuda()
-    STD  = torch.Tensor([0.229, 0.224, 0.225]).cuda()
+    MEAN = torch.Tensor([0.485, 0.456, 0.406]).reshape([3, 1, 1]).cuda()
+    STD  = torch.Tensor([0.229, 0.224, 0.225]).reshape([3, 1, 1]).cuda()
 
     # Freezing Encoder
     # for i, child in enumerate(model.children()):
@@ -235,44 +235,11 @@ def main():
 
             for i, (data, target) in enumerate(dataloader, 1): 
                 # ----------------------------------------------------- #
-                # Mapping DEHAZE - GT, with Perceptual Loss             #
+                # Train Loop                                            #
                 # ----------------------------------------------------- #
                 data, target = data.float().cuda(), target.float().cuda() 
-
-                optimizer.zero_grad()
-
-                outputs, A, t = model(data)
-
-                L2 = criterionMSE(outputs, target)
-
-                if kappa != 0:
-                    outputsvgg = net_vgg(outputs)
-                    targetvgg  = net_vgg(target)
-                    Lp = sum([criterionMSE(outputVGG, targetVGG) for (outputVGG, targetVGG) in zip(outputsvgg, targetvgg)])
-                    loss = L2 + kappa * Lp
-                else:
-                    loss = L2
-
-                # ----------------------------------------------------- #
-                # Mapping REHAZE - HAZE(I), with Perceptual Loss        #
-                # ----------------------------------------------------- #
-                if gamma != 0:
-                    rehaze = target * t + A * (1 - t)
-                    
-                    RehazeL2 = criterionMSE(rehaze, data)
-
-                    if kappa != 0:
-                        rehazesvgg = net_vgg(rehaze)
-                        datasvgg   = net_vgg(data)
-                        RehazeLp   = sum([criterionMSE(rehazeVGG, dataVGG) for (rehazeVGG, dataVGG) in zip(rehazesvgg, datasvgg)])
-                        loss += gamma * RehazeL2 + kappa * RehazeLp
-                    else:
-                        loss += gamma * RehazeL2
-                    
-                # Update parameters
-                loss.backward()
-                optimizer.step()
-                running_loss += loss.item()
+                loss = train(data, target, model, optimizer, criterionMSE, net_vgg, gamma, kappa)
+                running_loss += loss
                 
                 # ----------------------------------------------------- #
                 # Print Loop                                            #
@@ -306,18 +273,17 @@ def main():
                             output = model(data)[0]
 
                             # Back to domain 0 ~ 1
-                            target.mul_(torch.Tensor([0.229, 0.224, 0.225]).reshape(3, 1, 1)).add_(torch.Tensor([0.485, 0.456, 0.406]).reshape(3, 1, 1))
-                            output.mul_(torch.Tensor([0.229, 0.224, 0.225]).reshape(3, 1, 1)).add_(torch.Tensor([0.485, 0.456, 0.406]).reshape(3, 1, 1))
+                            target.mul_(STD).add_(MEAN)
+                            output.mul_(STD).add_(MEAN)
 
-                            loss = criterionMSE(output, target)
-
-                            # PSNR / SSIM in torch.Tensor
-                            psnr = 10 * log10(1 / loss.item())
-                            ssim = SSIM(output, target)
-                            
-                            valLoss += loss
-                            valPSNR += psnr
-                            valSSIM += ssim 
+                            for k in range(output.shape[0]):
+                                loss = criterionMSE(output[k], target[k]).item()
+                                psnr = 10 * log10(1 / loss)
+                                ssim = 0 # SSIM(output, target)
+                                
+                                valLoss += loss
+                                valPSNR += psnr
+                                valSSIM += ssim 
 
                         # Print Summary
                         valLoss = valLoss / len(valDataloader)
