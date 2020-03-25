@@ -114,17 +114,11 @@ def getDataLoaders(opt, train_transform, val_transform, distributed=False):
         TrainLoader and ValidationLoader
     """
     trainset = DatasetFromFolder(opt.dataroot, transform=train_transform)
-    valset   = DatasetFromFolder(opt.dataroot, transform=val_transform)
-
     train_sampler = None
-    val_sampler   = None
 
     if distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             trainset, num_replicas=hvd.size(), rank=hvd.rank())
-
-        val_sampler = torch.utils.data.distributed.DistributedSampler(
-            valset, num_replicas=hvd.size(), rank=hvd.rank())
 
     ntire_train_loader = DataLoader(
         dataset=trainset,
@@ -136,12 +130,11 @@ def getDataLoaders(opt, train_transform, val_transform, distributed=False):
     )
 
     ntire_val_loader = DataLoader(
-        dataset=valset,
+        dataset=DatasetFromFolder(opt.valDataroot, transform=val_transform),
         num_workers=opt.workers, 
         batch_size=opt.valBatchSize, 
         pin_memory=True, 
-        shuffle=(not distributed),
-        sampler=val_sampler
+        shuffle=True,
     )
 
     return ntire_train_loader, ntire_val_loader
