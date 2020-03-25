@@ -97,7 +97,7 @@ def val(data, target, model: nn.Module, criterion, perceptual=None, gamma=0, kap
 
     return dehaze, loss.item()
 
-def getDataLoaders(opt, train_transform, val_transform, hvd=False):
+def getDataLoaders(opt, train_transform, val_transform, distributed=False):
     """
     Parameters
     ----------
@@ -105,7 +105,7 @@ def getDataLoaders(opt, train_transform, val_transform, hvd=False):
 
     train_transform, val_transform : torchvision.transform
 
-    hvd : bool
+    distributed : bool
         True if using distributed training
 
     Return
@@ -119,7 +119,7 @@ def getDataLoaders(opt, train_transform, val_transform, hvd=False):
     train_sampler = None
     val_sampler   = None
 
-    if hvd:
+    if distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(
             trainset, num_replicas=hvd.size(), rank=hvd.rank())
 
@@ -127,20 +127,20 @@ def getDataLoaders(opt, train_transform, val_transform, hvd=False):
             valset, num_replicas=hvd.size(), rank=hvd.rank())
 
     ntire_train_loader = DataLoader(
-        dataset=trainset
+        dataset=trainset,
         num_workers=opt.workers, 
         batch_size=opt.batchSize, 
         pin_memory=True, 
-        shuffle=(not hvd),
+        shuffle=(not distributed),
         sampler=train_sampler
     )
 
     ntire_val_loader = DataLoader(
-        dataset=valset
+        dataset=valset,
         num_workers=opt.workers, 
         batch_size=opt.valBatchSize, 
         pin_memory=True, 
-        shuffle=(not hvd),
+        shuffle=(not distributed),
         sampler=val_sampler
     )
 
@@ -155,6 +155,20 @@ def main():
 
     if not os.path.exists(opt.outdir):
         os.makedirs(opt.outdir)
+
+    # ----------------------------------------------------- #
+    # Set GPU Channel (Horovod)                             #
+    # ----------------------------------------------------- #
+    os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join([str(n) for n in opt.gpus])
+
+    if len(opt.gpus) > 1:
+        hvd.init()
+        torch.cuda.set_device(hvd.local_rank())
+        verbose = 1 if hvd.rank() == 0 else 0
+
+        opt.verbose = verbose
+        opt.gpus    = ','.join([str(n) for n in opt.gpus])
 
     # ----------------------------------------------------- #
     # Training settings                                     #
@@ -176,7 +190,7 @@ def main():
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    dataloader, valDataloader = getDataLoaders(opt, train_transform, val_transform)
+    dataloader, valDataloader = getDataLoaders(opt, train_transform, val_transform, distributed=True)
 
     criterionMSE = nn.MSELoss()
     criterionMSE.cuda()
@@ -196,20 +210,6 @@ def main():
     min_valloss, min_valloss_epoch = 20.0, 0
     max_valpsnr, max_valpsnr_epoch = 0.0, 0
     max_valssim, max_valssim_epoch = 0.0, 0
-
-    # ----------------------------------------------------- #
-    # Set GPU Channel (Horovod)                             #
-    # ----------------------------------------------------- #
-    os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join([str(n) for n in opt.gpus])
-
-    if len(opt.gpus) > 1:
-        hvd.init()
-        torch.cuda.set_device(hvd.local_rank())
-        verbose = 1 if hvd.rank() == 0 else 0
-
-        opt.verbose = verbose
-        opt.gpus    = ','.join([str(n) for n in opt.gpus])
 
     # ----------------------------------------------------- #
     # Deploy model (and Perceptual Network)                 #
