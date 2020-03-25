@@ -18,9 +18,9 @@ parser.add_argument('--outdir',
 # Training curve setting                                #
 # ----------------------------------------------------- #
 parser.add_argument('--print_every', type=int,
-    default=10, help="Number of iterations to print")
+    default=100, help="Number of iterations to print")
 parser.add_argument('--val_every', type=int,
-    default=500, help="Number of iterations to validate")
+    default=2000, help="Number of iterations to validate")
 parser.add_argument('--comment', type=str,
     default='AtJ_DH', help='Folder to output images and model checkpoints') 
 
@@ -29,6 +29,8 @@ parser.add_argument('--comment', type=str,
 # ----------------------------------------------------- #
 parser.add_argument('--learningRate', type=float,
     default=1e-4, help='Initial Learning Rate')
+parser.add_argument('--weight_decay', type=float,
+    default=5e-5, help='L2 regularization ratio.')
 parser.add_argument('--step', type=int,
     default=20, help='Step size of Learning Rate schedular')
 parser.add_argument('--gamma', type=float, 
