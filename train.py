@@ -25,7 +25,6 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from torchvision.transforms import (Compose, Normalize, RandomHorizontalFlip,
                                     RandomVerticalFlip, ToTensor)
 
-# import model.AtJ_At as atj
 from cmdparser import parser
 from datasets.data import DatasetFromFolder
 from misc_train import DehazeLoss, HazeLoss
@@ -35,6 +34,7 @@ from tensorboardX import SummaryWriter
 from transforms.ssim import ssim as SSIM
 from utils.utils import norm_ip, norm_range
 
+# Constant parameters
 MEAN, STD = None, None
 
 def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion, perceptual=None, gamma=0, kappa=0):
@@ -135,17 +135,15 @@ def main():
             raise ValueError("Directory --outdir {} exists and not empty.".format(opt.outdir))
 
     if not os.path.exists(opt.outdir):
-        os.makedirs(opt.outdir)
+        os.makedirs(opt.outdir, exist_ok=True)
 
+    # ----------------------------------------------------- #
+    # Training settings                                     #
+    # ----------------------------------------------------- #
     opt.manualSeed = random.randint(1, 10000)
     random.seed(opt.manualSeed)
     torch.manual_seed(opt.manualSeed)
     torch.cuda.manual_seed_all(opt.manualSeed)
-
-    with open(os.path.join(opt.outdir, "record.txt"), 'w') as f:
-        for key, value in vars(opt).items():
-            print("{:20} {:>50}".format(key, str(value)))
-            f.write("{:20} {:>50}\n".format(key, str(value)))
 
     train_transform = Compose([
         # RandomHorizontalFlip(),
@@ -180,7 +178,12 @@ def main():
     max_valpsnr, max_valpsnr_epoch = 0.0, 0
     max_valssim, max_valssim_epoch = 0.0, 0
 
-    # Deploy model and perceptual model
+    # ----------------------------------------------------- #
+    # Deploy model (and Perceptual Network) with GPU(s)     #
+    # ----------------------------------------------------- #
+    os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join([str(n) for n in opt.gpus])
+    
     model = Dense()
     net_vgg = None
 
@@ -191,40 +194,33 @@ def main():
         net_vgg = vgg16ca()
         net_vgg.eval()
 
-    # Set GPU (Data parallel)
     if len(opt.gpus) > 1:
-        raise NotImplementedError
-
         model = nn.DataParallel(model, device_ids=opt.gpus)
         net_vgg = nn.DataParallel(net_vgg, device_ids=opt.gpus)
 
-    else:
-        os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(opt.gpus[0])
-
-        model.cuda()
-        if kappa != 0: 
-            net_vgg.cuda()
+    model.cuda()
+    if kappa != 0: 
+        net_vgg.cuda()
 
     MEAN = torch.Tensor([0.485, 0.456, 0.406]).reshape([3, 1, 1]).cuda()
     STD  = torch.Tensor([0.229, 0.224, 0.225]).reshape([3, 1, 1]).cuda()
-
-    # Freezing Encoder
-    # for i, child in enumerate(model.children()):
-    #     if i == 12: 
-    #         break
-    # 
-    #     for param in child.parameters(): 
-    #         param.requires_grad = False 
 
     # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
         lr = opt.learningRate, 
-        weight_decay=5e-5
+        weight_decay=opt.weight_decay
     )
 
     scheduler = StepLR(optimizer, step_size=opt.step, gamma=opt.gamma)
+
+    # ----------------------------------------------------- #
+    # Training setting report and show                      #
+    # ----------------------------------------------------- # 
+    with open(os.path.join(opt.outdir, "record.txt"), 'w') as f:
+        for key, value in vars(opt).items():
+            print("{:20} {:>50}".format(key, str(value)))
+            f.write("{:20} {:>50}\n".format(key, str(value)))
 
     # Main Loop of training
     t0 = time.time()
@@ -248,8 +244,8 @@ def main():
                     running_loss = running_loss / print_every
 
                     print('Epoch: {:2d} ({:3d} h {:3d} min {:3d} s) [{:5d} / {:5d}] loss: {:.3f}'.format(
-                        epoch + 1, int((time.time() - t0) // 3600), int(((time.time() - t0) // 60) % 60), int(((time.time()) - t0) % 60),
-                        i, len(dataloader), running_loss))
+                        epoch + 1, int((time.time() - t0) // 3600), int(((time.time() - t0) // 60) % 60), 
+                        int(((time.time()) - t0) % 60),i, len(dataloader), running_loss))
 
                     writer.add_scalar('./scalar/trainLoss', running_loss, epoch * len(dataloader) + i)
 
@@ -294,7 +290,9 @@ def main():
                         writer.add_scalar('./scalar/valPSNR', valPSNR, epoch * len(dataloader) + i)
                         writer.add_scalar('./scalar/valSSIM', valSSIM, epoch * len(dataloader) + i)
                        
-                        # Save if update the best
+                        # ----------------------------------------------------- #
+                        # Save if reach the best                                #
+                        # ----------------------------------------------------- #
                         if valLoss < min_valloss:
                             min_valloss = valLoss
                             min_valloss_epoch = epoch + 1
@@ -326,7 +324,9 @@ def main():
 
                     model.train()
             
-            # Save checkpoint
+            # ----------------------------------------------------- #
+            # Process after each epochs                             #
+            # ----------------------------------------------------- #
             torch.save(
                 {
                     'model': model.state_dict(),
@@ -340,6 +340,9 @@ def main():
             # Decay Learning Rate
             scheduler.step()
 
+    # ----------------------------------------------------- #
+    # Process end                                           #
+    # ----------------------------------------------------- #
     print('FINISHED TRAINING')
     torch.save(model.state_dict(), os.path.join(opt.outdir, 'AtJ_DH.pth'))
 

@@ -1,13 +1,14 @@
 """
-  Filename       [ train-stage4.py ]
+  Filename       [ train-parallel.py ]
   PackageName    [ AtJ_DH ]
-  Synopsis       [ Training process with NYU Dataset and tensorboardX ]
+  Synopsis       [ Training process with dataparallel ]
 """
 
 import argparse
 import os
 import random
 import time
+from math import log10
 
 import numpy as np
 import torch
@@ -15,45 +16,39 @@ import torch.backends.cudnn as cudnn
 import torch.nn as nn
 import torch.nn.parallel
 import torch.optim as optim
-from torch.utils.data import DataLoader
 from matplotlib import pyplot as plt
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 from torch import optim as optim
 from torch.optim.lr_scheduler import StepLR
+from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
+from torchvision.transforms import (Compose, Normalize, RandomHorizontalFlip,
+                                    RandomVerticalFlip, ToTensor)
 
-# import model.AtJ_At as atj
 from cmdparser import parser
 from datasets.data import DatasetFromFolder
 from misc_train import DehazeLoss, HazeLoss
 from model.At_model import Dense
 from model.perceptual import Perceptual, vgg16ca
 from tensorboardX import SummaryWriter
-from torchvision.transforms import (Compose, Normalize, RandomHorizontalFlip,
-                                    RandomVerticalFlip, ToTensor)
+from transforms.ssim import ssim as SSIM
 from utils.utils import norm_ip, norm_range
 
+# Constant parameters
+MEAN, STD = None, None
 
 def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion, perceptual=None, gamma=0, kappa=0):
     """
     Parameters
     ----------
-    data, target : torch.Tensor
-
-    model : nn.Module
-
-    optimizer : optim.Optimizer
-
-    criterion : nn.Module
-
-    perceptual : { nn.Module, None } optional
+    perceptual : optional
         Perceptual loss is applied if nn.Module is provided.
     
     gamma : float
-        The ratio of ReHaze - Data Pair.
+        The ratio of DeHaze - Target Pair and ReHaze - Data Pair.
 
     kappa : float
-        The ratio of perceptual loss.
+        The ratio of criterion and perceptual loss.
     """
     optimizer.zero_grad()
 
@@ -68,48 +63,6 @@ def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion,
         amap, tmap = output[1], output[2]
         rehaze = target * tmap + amap * (1 - tmap)
         loss += gamma * HazeLoss(rehaze, data, criterion, perceptual, kappa=kappa)
-
-    loss.backward()
-    optimizer.step()
-
-    return loss.item()
-
-def trainWithAT(data, A, t, target, model: nn.Module, optimizer: optim.Optimizer, criterion, perceptual=None, gamma=0, kappa=0):
-    """
-    Parameters
-    ----------
-    data, A, t, target : torch.Tensor
-
-    model : nn.Module
-
-    optimizer : optim.Optimizer
-
-    criterion : nn.Module
-
-    perceptual : { nn.Module, None } optional
-        Perceptual loss is applied if nn.Module is provided.
-    
-    gamma : float
-        The ratio of ReHaze - Data Pair.
-
-    kappa : float
-        The ratio of perceptual loss.
-    """
-    optimizer.zero_grad()
-
-    dehaze, A_hat, t_hat = model(data)
-
-    # DeHaze - Target Pair
-    loss = DehazeLoss(dehaze, target, criterion, perceptual, kappa=kappa) 
-    
-    # ReHaze - Data Pair
-    if gamma != 0: 
-        rehaze = target * t_hat + A_hat * (1 - t_hat)
-        loss += gamma * HazeLoss(rehaze, data, criterion, perceptual, kappa=kappa)
-
-    # A_Hat - A Pair
-    loss += criterion(A_hat, A)
-    loss += criterion(t_hat, t)
 
     loss.backward()
     optimizer.step()
@@ -164,15 +117,6 @@ def getDataLoaders(opt, train_transform, val_transform):
         shuffle=True
     )
 
-    nyu_train_loader = getLoader(
-        dataroot=opt.nyuDataroot,
-        transform=train_transform,
-        batchSize=opt.batchSize,
-        workers=opt.workers,
-        shuffle=True,
-        seed=opt.manualSeed
-    )
-
     ntire_val_loader = DataLoader(
         dataset=DatasetFromFolder(opt.valDataroot, transform=val_transform), 
         num_workers=opt.workers, 
@@ -181,7 +125,7 @@ def getDataLoaders(opt, train_transform, val_transform):
         shuffle=True
     )
 
-    return ntire_train_loader, nyu_train_loader, ntire_val_loader
+    return ntire_train_loader, ntire_val_loader
 
 def main():
     opt = parser.parse_args()
@@ -191,17 +135,15 @@ def main():
             raise ValueError("Directory --outdir {} exists and not empty.".format(opt.outdir))
 
     if not os.path.exists(opt.outdir):
-        os.makedirs(opt.outdir)
+        os.makedirs(opt.outdir, exist_ok=True)
 
+    # ----------------------------------------------------- #
+    # Training settings                                     #
+    # ----------------------------------------------------- #
     opt.manualSeed = random.randint(1, 10000)
     random.seed(opt.manualSeed)
     torch.manual_seed(opt.manualSeed)
     torch.cuda.manual_seed_all(opt.manualSeed)
-
-    with open(os.path.join(opt.outdir, "record.txt"), 'w') as f:
-        for key, value in vars(opt).items():
-            print("{:20} {:>50}".format(key, str(value)))
-            f.write("{:20} {:>50}\n".format(key, str(value)))
 
     train_transform = Compose([
         # RandomHorizontalFlip(),
@@ -215,7 +157,7 @@ def main():
         Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    dataloader, nyuloader, valDataloader = getDataLoaders(opt, train_transform, val_transform)
+    dataloader, valDataloader = getDataLoaders(opt, train_transform, val_transform)
 
     criterionMSE = nn.MSELoss()
     criterionMSE.cuda()
@@ -236,77 +178,64 @@ def main():
     max_valpsnr, max_valpsnr_epoch = 0.0, 0
     max_valssim, max_valssim_epoch = 0.0, 0
 
-    # Deploy model and perceptual model
+    # ----------------------------------------------------- #
+    # Deploy model (and Perceptual Network) with GPU(s)     #
+    # ----------------------------------------------------- #
+    os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join([str(n) for n in opt.gpus])
+
     model = Dense()
     net_vgg = None
 
     if opt.netG:
-        model.load_state_dict(torch.load(opt.netG)['model'])
+        model.load_state_dict(torch.load(opt.netG, map_location=torch.device('cpu'))['model'])
 
     if kappa != 0:
         net_vgg = vgg16ca()
         net_vgg.eval()
 
-    # Set GPU (Data parallel)
     if len(opt.gpus) > 1:
-        raise NotImplementedError
-
         model = nn.DataParallel(model, device_ids=opt.gpus)
         net_vgg = nn.DataParallel(net_vgg, device_ids=opt.gpus)
 
-    else:
-        os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(opt.gpus[0])
+    model.cuda()
+    if kappa != 0: 
+        net_vgg.cuda()
 
-        model.cuda()
-        if kappa != 0: 
-            net_vgg.cuda()
-
-    # Freezing Encoder
-    # for i, child in enumerate(model.children()):
-    #     if i == 12: 
-    #         break
-    # 
-    #     for param in child.parameters(): 
-    #         param.requires_grad = False 
+    MEAN = torch.Tensor([0.485, 0.456, 0.406]).reshape([3, 1, 1]).cuda()
+    STD  = torch.Tensor([0.229, 0.224, 0.225]).reshape([3, 1, 1]).cuda()
 
     # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
         lr = opt.learningRate, 
-        weight_decay=0.00005
+        weight_decay=opt.weight_decay
     )
 
     scheduler = StepLR(optimizer, step_size=opt.step, gamma=opt.gamma)
 
+    # ----------------------------------------------------- #
+    # Training setting report and show                      #
+    # ----------------------------------------------------- # 
+    with open(os.path.join(opt.outdir, "record.txt"), 'w') as f:
+        for key, value in vars(opt).items():
+            print("{:20} {:>50}".format(key, str(value)))
+            f.write("{:20} {:>50}\n".format(key, str(value)))
+
     # Main Loop of training
     t0 = time.time()
 
-    with SummaryWriter(comment='AtJ_DH') as writer:
+    with SummaryWriter(comment=opt.comment) as writer:
         for epoch in range(startepoch, epochs):
             model.train() 
 
-            for i, (packet1, packet2) in enumerate(zip(dataloader, nyuloader), 1): 
+            for i, (data, target) in enumerate(dataloader, 1): 
                 # ----------------------------------------------------- #
-                # Mapping DEHAZE - GT, with Perceptual Loss             #
+                # Train Loop                                            #
                 # ----------------------------------------------------- #
-                data, target = packet1
                 data, target = data.float().cuda(), target.float().cuda() 
-
-                loss = train(data, target, model, optimizer, criterionMSE, vgg16ca, gamma, kappa)
-
-                running_loss += loss.item()
-
-                # ----------------------------------------------------- #
-                # Mapping HAZE - GT and t - t, with Perceptual Loss     #
-                # ----------------------------------------------------- #
-                data, A, t, target = packet2
-                data, A, t, target = data.float().cuda(), A.float().cuda(), t.float.cuda(), target.float().cuda() 
-                
-                loss = trainWithAT(data, A, t, target, model, optimizer, criterionMSE, vgg16ca, gamma, kappa)
-                
-                # Update parameters
-                running_loss += loss.item()
+                loss = train(data, target, model, optimizer, criterionMSE, net_vgg, gamma, kappa)
+                running_loss += loss
                 
                 # ----------------------------------------------------- #
                 # Print Loop                                            #
@@ -315,8 +244,8 @@ def main():
                     running_loss = running_loss / print_every
 
                     print('Epoch: {:2d} ({:3d} h {:3d} min {:3d} s) [{:5d} / {:5d}] loss: {:.3f}'.format(
-                        epoch + 1, int((time.time() - t0) // 3600), int(((time.time() - t0) // 60) % 60), int(((time.time()) - t0) % 60),
-                        i, len(dataloader), running_loss))
+                        epoch + 1, int((time.time() - t0) // 3600), int(((time.time() - t0) // 60) % 60), 
+                        int(((time.time()) - t0) % 60),i, len(dataloader), running_loss))
 
                     writer.add_scalar('./scalar/trainLoss', running_loss, epoch * len(dataloader) + i)
 
@@ -336,39 +265,34 @@ def main():
                         for j, (data, target) in enumerate(valDataloader, 1):
                             data, target = data.float().cuda(), target.float().cuda()
 
+                            # MSE Loss Only
                             output = model(data)[0]
-                            L2 = criterionMSE(output, target)
+
+                            # Back to domain 0 ~ 1
+                            target.mul_(STD).add_(MEAN)
+                            output.mul_(STD).add_(MEAN)
+
+                            for k in range(output.shape[0]):
+                                loss = criterionMSE(output[k], target[k]).item()
+                                psnr = 10 * log10(1 / loss)
+                                ssim = 0 # SSIM(output, target)
                                 
-                            # tensor to ndarr to get PSNR, SSIM
-                            tensors = [output.data.cpu(), target.data.cpu()]
-                            npimgs = [] 
-
-                            for t in tensors: 
-                                t = torch.squeeze(t)
-                                t = norm_range(t, None)
-
-                                npimg = t.mul(255).byte().numpy()
-                                npimg = np.transpose(npimg, (1, 2, 0)) # CHW to HWC
-                                npimgs.append(npimg)
-
-                            # Calculate PSNR and SSIM
-                            psnr = peak_signal_noise_ratio(npimgs[0], npimgs[1])
-                            ssim = structural_similarity(npimgs[0], npimgs[1], multichannel = True)
-
-                            valLoss += loss
-                            valPSNR += psnr
-                            valSSIM += ssim 
+                                valLoss += loss
+                                valPSNR += psnr
+                                valSSIM += ssim 
 
                         # Print Summary
-                        valLoss = valLoss / len(valDataloader)
-                        valPSNR = valPSNR / len(valDataloader)
-                        valSSIM = valSSIM / len(valDataloader)
+                        valLoss = valLoss / len(valDataloader.dataset)
+                        valPSNR = valPSNR / len(valDataloader.dataset)
+                        valSSIM = valSSIM / len(valDataloader.dataset)
 
                         writer.add_scalar('./scalar/valLoss', valLoss, epoch * len(dataloader) + i)
                         writer.add_scalar('./scalar/valPSNR', valPSNR, epoch * len(dataloader) + i)
                         writer.add_scalar('./scalar/valSSIM', valSSIM, epoch * len(dataloader) + i)
                        
-                        # Save if update the best
+                        # ----------------------------------------------------- #
+                        # Save if reach the best                                #
+                        # ----------------------------------------------------- #
                         if valLoss < min_valloss:
                             min_valloss = valLoss
                             min_valloss_epoch = epoch + 1
@@ -400,7 +324,9 @@ def main():
 
                     model.train()
             
-            # Save checkpoint
+            # ----------------------------------------------------- #
+            # Process after each epochs                             #
+            # ----------------------------------------------------- #
             torch.save(
                 {
                     'model': model.state_dict(),
@@ -414,6 +340,9 @@ def main():
             # Decay Learning Rate
             scheduler.step()
 
+    # ----------------------------------------------------- #
+    # Process end                                           #
+    # ----------------------------------------------------- #
     print('FINISHED TRAINING')
     torch.save(model.state_dict(), os.path.join(opt.outdir, 'AtJ_DH.pth'))
 
