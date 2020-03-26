@@ -37,6 +37,10 @@ from utils.utils import norm_ip, norm_range
 # Constant parameters
 MEAN, STD = None, None
 
+def flipCoin(p: float):
+    assert(p >= 0 and p <= 1)
+    return random.random() < p
+
 def train(data, target, model: nn.Module, optimizer: optim.Optimizer, criterion, perceptual=None, gamma=0, kappa=0):
     """
     Parameters
@@ -128,6 +132,7 @@ def getDataLoaders(opt, train_transform, val_transform):
     return ntire_train_loader, ntire_val_loader
 
 def main():
+    parser.add_argument('--identityRatio', type=float, default=0)
     opt = parser.parse_args()
 
     if os.path.exists(opt.outdir):
@@ -241,12 +246,13 @@ def main():
         for epoch in range(startepoch, epochs):
             model.train() 
 
-            for i, (_, target) in enumerate(dataloader, 1): 
+            for i, (data, target) in enumerate(dataloader, 1): 
                 # ----------------------------------------------------- #
                 # Train Loop                                            #
                 # ----------------------------------------------------- #
-                target = target.float().cuda() 
-                loss = train(target, target, model, optimizer, criterionMSE, net_vgg, gamma, kappa)
+                if flipCoin(opt.identityRatio): data = target
+                data, target = data.float().cuda(), target.float().cuda() 
+                loss = train(data, target, model, optimizer, criterionMSE, net_vgg, gamma, kappa)
                 running_loss += loss
                 
                 # ----------------------------------------------------- #
@@ -274,11 +280,11 @@ def main():
                     valLoss, valPSNR, valSSIM = 0.0, 0.0, 0.0
 
                     with torch.no_grad():
-                        for j, (_, target) in enumerate(valDataloader, 1):
-                            target = target.float().cuda()
+                        for j, (data, target) in enumerate(valDataloader, 1):
+                            data, target = data.float().cuda(), target.float().cuda()
 
                             # MSE Loss Only
-                            output = model(target)[0]
+                            output = model(data)[0]
 
                             # Back to domain 0 ~ 1
                             target.mul_(STD).add_(MEAN)
