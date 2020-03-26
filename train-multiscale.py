@@ -1,7 +1,7 @@
 """
-  Filename       [ train-parallel.py ]
+  Filename       [ train-multiscale.py ]
   PackageName    [ AtJ_DH ]
-  Synopsis       [ Training process with dataparallel ]
+  Synopsis       [ Training process with multiscale input ]
 """
 
 import argparse
@@ -28,7 +28,7 @@ from torchvision.transforms import (Compose, Normalize, RandomHorizontalFlip,
 from cmdparser import parser
 from datasets.data import DatasetFromFolder
 from misc_train import DehazeLoss, HazeLoss
-from model.At_model import Dense
+from model.My_At_model_Multiscale import Dense_At as Dense
 from model.perceptual import Perceptual, vgg16ca
 from tensorboardX import SummaryWriter
 from transforms.ssim import ssim as SSIM
@@ -183,12 +183,21 @@ def main():
     # ----------------------------------------------------- #
     os.environ["CUDA_DEVICE_ORDER"]    = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = ','.join([str(n) for n in opt.gpus])
-
+    
     model = Dense()
     net_vgg = None
 
     if opt.netG:
-        model.load_state_dict(torch.load(opt.netG, map_location=torch.device('cpu'))['model'])
+        state_dict = torch.load(opt.netG, map_location=torch.device('cpu'))
+        model.load_state_dict(state_dict['model'])
+
+        if 'optimizer' in state_dict:
+            pass
+    
+        if 'scheduler' in state_dict:
+            pass
+
+        del state_dict
 
     if kappa != 0:
         net_vgg = vgg16ca()
@@ -202,8 +211,6 @@ def main():
     if kappa != 0: 
         net_vgg.cuda()
 
-    MEAN = torch.Tensor([0.485, 0.456, 0.406]).reshape([3, 1, 1]).cuda()
-    STD  = torch.Tensor([0.229, 0.224, 0.225]).reshape([3, 1, 1]).cuda()
 
     # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
@@ -213,6 +220,12 @@ def main():
     )
 
     scheduler = StepLR(optimizer, step_size=opt.step, gamma=opt.gamma)
+
+    # ----------------------------------------------------- #
+    # MISC                                                  #
+    # ----------------------------------------------------- # 
+    MEAN = torch.Tensor([0.485, 0.456, 0.406]).reshape([3, 1, 1]).cuda()
+    STD  = torch.Tensor([0.229, 0.224, 0.225]).reshape([3, 1, 1]).cuda()
 
     # ----------------------------------------------------- #
     # Training setting report and show                      #

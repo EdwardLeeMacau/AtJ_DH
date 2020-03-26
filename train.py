@@ -188,7 +188,16 @@ def main():
     net_vgg = None
 
     if opt.netG:
-        model.load_state_dict(torch.load(opt.netG, map_location=torch.device('cpu'))['model'])
+        state_dict = torch.load(opt.netG, map_location=torch.device('cpu'))
+        model.load_state_dict(state_dict['model'])
+
+        if 'optimizer' in state_dict:
+            pass
+    
+        if 'scheduler' in state_dict:
+            pass
+
+        del state_dict
 
     if kappa != 0:
         net_vgg = vgg16ca()
@@ -202,9 +211,6 @@ def main():
     if kappa != 0: 
         net_vgg.cuda()
 
-    MEAN = torch.Tensor([0.485, 0.456, 0.406]).reshape([3, 1, 1]).cuda()
-    STD  = torch.Tensor([0.229, 0.224, 0.225]).reshape([3, 1, 1]).cuda()
-
     # Setup Optimizer and Scheduler
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()), 
@@ -213,6 +219,12 @@ def main():
     )
 
     scheduler = StepLR(optimizer, step_size=opt.step, gamma=opt.gamma)
+
+    # ----------------------------------------------------- #
+    # MISC                                                  #
+    # ----------------------------------------------------- # 
+    MEAN = torch.Tensor([0.485, 0.456, 0.406]).reshape([3, 1, 1]).cuda()
+    STD  = torch.Tensor([0.229, 0.224, 0.225]).reshape([3, 1, 1]).cuda()
 
     # ----------------------------------------------------- #
     # Training setting report and show                      #

@@ -49,8 +49,8 @@ parser.add_argument('--lambdaG', type=float,
     default=0.0, help='Proportion of Rehaze Loss')
 parser.add_argument('--lambdaK', type=float, 
     default=0.0, help='Proportion of Perceptual Loss')
-parser.add_argument('--poolSize', type=int, 
-    default=50, help='Buffer size for storing previously generated samples from G')
+# parser.add_argument('--poolSize', type=int, 
+#     default=50, help='Buffer size for storing previously generated samples from G')
 parser.add_argument('--netG', type=str,
     default=None, help="Path to netG (to continue training)")
 

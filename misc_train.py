@@ -108,6 +108,31 @@ def HazeLoss(rehaze, target, criterion, perceptual=None, kappa=0):
 
     return loss
 
+def identityLoss(output, target, criterion, perceptual=None, kappa=0):
+    """
+    Parameters
+    ----------
+    perceptual : optional
+        Perceptual loss is applied if nn.Module is provided.
+    
+    kappa : float
+        The ratio of criterion and perceptual loss.
+
+    Return
+    ------
+    loss :
+        The loss and the gradient information
+    """
+    loss = criterion(output, target)
+
+    if perceptual is not None: 
+        outputsVGG = perceptual(output)
+        targetsVGG = perceptual(target)
+        
+        loss += kappa * sum([criterion(outputvgg, targetvgg) for (outputvgg, targetvgg) in zip(outputsVGG, targetsVGG)])
+
+    return loss
+
 def weights_init(m):
     classname = m.__class__.__name__
 
@@ -116,42 +141,6 @@ def weights_init(m):
     elif classname.find('BatchNorm') != -1:
         m.weight.data.normal_(1.0, 0.02) # seems that can't use xavier nor kaiming normal
         m.bias.data.fill_(0)
-
-def getLoader(dataroot, transform=None, batchSize=4, workers=4, shuffle=True, seed=None):
-    """
-    Parameters
-    ----------
-    dataroot :
-        director of dataset
-
-    transform :
-
-    batchSize : int
-    
-    workers : int
-    
-    transform : torchvision.transform
-
-    Return
-    ------
-    dataloader : torch.utils.data.DataLoader
-        Desired dataloader
-    """
-    assert (isinstance(workers, int))
-    assert (isinstance(batchSize, int))
-
-    dataloader = DataLoader(
-        dataset=commonDataset(
-            root=dataroot,
-            transform=transform,
-            seed=seed
-        ),
-        batch_size=batchSize, 
-        shuffle=shuffle, 
-        num_workers=workers
-    )
-
-    return dataloader
 
 def saveTrainingCurve(train_loss, val_loss, psnr, ssim, epoch, fname=None, linewidth=1):
     """
@@ -225,11 +214,49 @@ def saveTrainingCurve(train_loss, val_loss, psnr, ssim, epoch, fname=None, linew
 
     return
 
+# (deprecated)
+# def getLoader(dataroot, transform=None, batchSize=4, workers=4, shuffle=True, seed=None):
+#     """
+#     Parameters
+#     ----------
+#     dataroot :
+#         director of dataset
+# 
+#     transform :
+# 
+#     batchSize : int
+#     
+#     workers : int
+#    
+#     transform : torchvision.transform
+# 
+#     Return
+#     ------
+#     dataloader : torch.utils.data.DataLoader
+#         Desired dataloader
+#     """
+#     assert (isinstance(workers, int))
+#     assert (isinstance(batchSize, int))
+# 
+#     dataloader = DataLoader(
+#         dataset=commonDataset(
+#             root=dataroot,
+#             transform=transform,
+#             seed=seed
+#         ),
+#         batch_size=batchSize, 
+#         shuffle=shuffle, 
+#         num_workers=workers
+#     )
+# 
+#     return dataloader
 
+# (deprecated)
 # def create_exp_dir(exp):
 #     os.makedirs(exp, exist_ok=True)
 #     print('Creating exp dir: %s' % exp)
 
+# (deprecated)
 # def adjust_learning_rate(optimizer, init_lr, epoch, factor, every):
 #     """
 #     :param optimizer: 
