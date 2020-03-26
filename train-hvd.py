@@ -147,7 +147,7 @@ def main():
             raise ValueError("Directory --outdir {} exists and not empty.".format(opt.outdir))
 
     if not os.path.exists(opt.outdir):
-        os.makedirs(opt.outdir)
+        os.makedirs(opt.outdir, exist_ok=True)
 
     # ----------------------------------------------------- #
     # Set GPU Channel (Horovod)                             #
